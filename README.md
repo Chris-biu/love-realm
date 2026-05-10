@@ -60,6 +60,28 @@ npm run dev
 
 打开 [http://localhost:3000](http://localhost:3000)。
 
+## Windows 桌面版打包
+
+生成 Windows 便携版桌面应用：
+
+```bash
+npm run desktop:dist
+```
+
+产物目录：
+
+```text
+dist-desktop/Love Realm-win32-x64/
+```
+
+玩家双击 `Love Realm.exe` 即可启动。应用会自动启动内置 Next.js 服务，并在玩家自己的系统数据目录创建 SQLite 数据库，例如：
+
+```text
+C:\Users\<you>\AppData\Roaming\Love Realm\love-realm.db
+```
+
+桌面版不会内置开发者的 DeepSeek API Key。玩家需要在游戏内输入自己的 DeepSeek API Key，该 Key 会保存在玩家本机的 Electron Local Storage 中。
+
 ## 主要目录
 
 ```text

@@ -3,6 +3,7 @@ node_modules
 .env
 .env.local
 dist
+dist-desktop
 coverage
 prisma/dev.db
 prisma/dev.db-journal
@@ -12,6 +13,7 @@ dev.db-journal
 .tools
 docs/superpowers
 /.data
+/.desktop
 /data
 *.db
 *.db-journal
