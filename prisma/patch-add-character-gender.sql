@@ -1,0 +1,1 @@
+ALTER TABLE "Character" ADD COLUMN "gender" TEXT NOT NULL DEFAULT '未知';

@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+model World {
+  id               String      @id @default(cuid())
+  slug             String      @unique
+  name             String
+  description      String
+  premise          String
+  storyGuide       String
+  defaultScene     String
+  defaultTime      String
+  initialMemory    String
+  statusMetrics    Json?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  characters       Character[]
+  sessions         Session[]
+}
+
+model Character {
+  id              String              @id @default(cuid())
+  slug            String
+  worldId         String
+  name            String
+  gender          String
+  roleLabel       String
+  publicSummary   String
+  secretSummary   String
+  personalityTags Json
+  initialMetrics  Json
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  world           World               @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  relationships   RelationshipState[]
+
+  @@unique([worldId, slug])
+}
+
+model Session {
+  id              String              @id @default(cuid())
+  worldId         String
+  title           String
+  provider        String
+  model           String
+  turnCount       Int                 @default(0)
+  isSaved         Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  world           World               @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  relationships   RelationshipState[]
+  memorySummaries MemorySummary[]
+  sceneStates     SceneState[]
+}
+
+model Message {
+  id         String      @id @default(cuid())
+  sessionId  String
+  role       MessageRole
+  turnNumber Int
+  content    String
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+  session    Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model RelationshipState {
+  id          String    @id @default(cuid())
+  sessionId   String
+  characterId String
+  metrics     Json
+  note        String?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, characterId])
+}
+
+model MemorySummary {
+  id         String   @id @default(cuid())
+  sessionId  String
+  turnNumber Int
+  content    String
+  createdAt  DateTime @default(now())
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model SceneState {
+  id           String   @id @default(cuid())
+  sessionId    String
+  turnNumber   Int
+  currentScene String
+  currentTime  String
+  atmosphere   String
+  summary      String
+  changes      Json
+  facts        Json
+  createdAt    DateTime @default(now())
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
