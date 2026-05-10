@@ -108,6 +108,14 @@ export type WorldSaveItem = {
   turnCount: number;
 };
 
+export type WorldCharacterItem = {
+  id: string;
+  name: string;
+  gender: string;
+  roleLabel: string;
+  publicSummary: string;
+};
+
 export type WorldCardItem = {
   id: string;
   slug: string;
@@ -116,6 +124,7 @@ export type WorldCardItem = {
   premise: string;
   defaultScene: string;
   characterCount: number;
+  characters: WorldCharacterItem[];
   savedSessions: WorldSaveItem[];
   updatedAt: string;
 };
@@ -337,7 +346,10 @@ export async function getWorldSelectionData(): Promise<WorldSelectionData> {
   const worlds = await prisma.world.findMany({
     orderBy: { updatedAt: "desc" },
     include: {
-      characters: { select: { id: true } },
+      characters: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, name: true, gender: true, roleLabel: true, publicSummary: true },
+      },
       sessions: {
         where: { isSaved: true },
         orderBy: { updatedAt: "desc" },
@@ -355,6 +367,13 @@ export async function getWorldSelectionData(): Promise<WorldSelectionData> {
       premise: world.premise,
       defaultScene: world.defaultScene,
       characterCount: world.characters.length,
+      characters: world.characters.map((character) => ({
+        id: character.id,
+        name: character.name,
+        gender: character.gender,
+        roleLabel: character.roleLabel,
+        publicSummary: character.publicSummary,
+      })),
       savedSessions: world.sessions.map((session) => ({
         id: session.id,
         title: session.title,

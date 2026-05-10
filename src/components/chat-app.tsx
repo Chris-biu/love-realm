@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { RELATIONSHIP_MAX, clampRelationshipMetric, getRelationshipStage } from "@/lib/relationship-scale";
 import { buildSessionDeletePlan, removeSessionFromList } from "@/lib/session-delete";
 import { buildSessionUrl } from "@/lib/session-url";
@@ -13,6 +13,7 @@ type ChatAppProps = {
 };
 
 type FeedbackTone = "default" | "success" | "pending";
+type DrawerView = "none" | "stage" | "backstage";
 
 type WorldDraft = {
   name: string;
@@ -42,8 +43,8 @@ const MODEL_LABELS: Record<string, string> = {
 
 const STARTER_PROMPTS = [
   "林月，你是不是一直在等我回来？",
-  "顾辰，昨晚你到底听见了什么？",
-  "苏娅，今天公馆里的气氛为什么这么奇怪？",
+  "今晚公馆里最不对劲的地方是什么？",
+  "苏娅，今天餐厅里的气氛为什么这么安静？",
 ];
 
 function getModelLabel(model: string) {
@@ -100,8 +101,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
   const [worldDraft, setWorldDraft] = useState<WorldDraft>(() => createWorldDraft(initialData.activeSession));
   const [characterDrafts, setCharacterDrafts] = useState<CharacterDraft[]>(() => createCharacterDrafts(initialData.activeSession));
   const [statusMetricDrafts, setStatusMetricDrafts] = useState<StatusMetricDefinition[]>(() => initialData.activeSession.statusMetrics.map((metric) => ({ ...metric })));
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isStageInfoOpen, setIsStageInfoOpen] = useState(false);
+  const [drawerView, setDrawerView] = useState<DrawerView>("none");
   const [isWorking, setIsWorking] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
@@ -123,6 +123,18 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
   useEffect(() => {
     chatStreamRef.current?.scrollTo({ top: chatStreamRef.current.scrollHeight, behavior: "smooth" });
   }, [activeSession.id, activeSession.messages]);
+
+  const latestAssistantMessage = useMemo(
+    () => [...activeSession.messages].reverse().find((message) => message.role === "ASSISTANT"),
+    [activeSession.messages],
+  );
+  const latestPlayerMessage = useMemo(
+    () => [...activeSession.messages].reverse().find((message) => message.role === "USER"),
+    [activeSession.messages],
+  );
+  const latestMemory = activeSession.memorySummaries.at(-1)?.content || "暂无长期记忆。";
+  const storyParagraphs = latestAssistantMessage ? splitParagraphs(latestAssistantMessage.content) : [];
+  const actionPrompts = activeSession.suggestedPrompts.length ? activeSession.suggestedPrompts : STARTER_PROMPTS;
 
   function updateFeedback(message: string, tone: FeedbackTone = "default") {
     setFeedback(message);
@@ -189,7 +201,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
       setActiveSession(payload.session);
       setSelectedModel(payload.session.model);
       syncSessionUrl(payload.session.id);
-      updateFeedback("新的临时剧情已创建，保存后才会出现在读档列表。", "success");
+      updateFeedback("新的临时剧情已创建，保存后会成为章节分支。", "success");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "创建会话失败。");
     } finally {
@@ -200,14 +212,14 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
   async function saveCurrentSession() {
     setError(null);
     setIsWorking(true);
-    updateFeedback("正在保存当前进度...", "pending");
+    updateFeedback("正在写入这一段回忆...", "pending");
     try {
       const payload = await readJson<{ session: SessionBundle; sessions: SessionListItem[] }>(
         await fetch(`/api/sessions/${activeSession.id}`, { method: "PATCH" }),
       );
       setActiveSession(payload.session);
       setSessions(payload.sessions);
-      updateFeedback("当前进度已保存，下次可在世界卡中读档。", "success");
+      updateFeedback("当前进度已保存为章节。", "success");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "保存进度失败。");
     } finally {
@@ -292,7 +304,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
             roleLabel: draft.roleLabel,
             publicSummary: draft.publicSummary,
             secretSummary: draft.secretSummary,
-            personalityTags: draft.personalityTagsText.split(/[、,，]/).map((item) => item.trim()).filter(Boolean),
+            personalityTags: draft.personalityTagsText.split(/[、，,]/).map((item) => item.trim()).filter(Boolean),
           }),
         }),
       );
@@ -365,7 +377,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     setError(null);
     setInput("");
     setIsWorking(true);
-    updateFeedback("剧情生成中...", "pending");
+    updateFeedback("正在生成剧情...", "pending");
     try {
       const payload = await readJson<{ session: SessionBundle; sessions: SessionListItem[] }>(
         await fetch(`/api/sessions/${activeSession.id}/messages`, {
@@ -394,12 +406,6 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     }
   }
 
-  const latestMemory = activeSession.memorySummaries.at(-1)?.content || "暂无长期记忆。";
-  const latestAssistantMessage = [...activeSession.messages].reverse().find((message) => message.role === "ASSISTANT");
-  const latestPlayerMessage = [...activeSession.messages].reverse().find((message) => message.role === "USER");
-  const storyParagraphs = latestAssistantMessage ? splitParagraphs(latestAssistantMessage.content) : [];
-  const actionPrompts = activeSession.suggestedPrompts.length ? activeSession.suggestedPrompts : STARTER_PROMPTS;
-
   return (
     <>
       <main className="story-shell">
@@ -410,9 +416,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                 <p className="eyebrow">关系状态</p>
                 <h2>角色温度</h2>
               </div>
-              <button className="secondary-button" onClick={createSession} disabled={isWorking || Boolean(deletingSessionId)}>
-                新建会话
-              </button>
+              <button className="secondary-button" onClick={createSession} disabled={isWorking || Boolean(deletingSessionId)}>新分支</button>
             </div>
             <div className="relationship-stack">
               {activeSession.relationships.map((item) => {
@@ -422,7 +426,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                     <div className="relationship-topline">
                       <div>
                         <strong>{item.character.name}</strong>
-                        <p className="relationship-meta">{item.character.gender} · {character?.roleLabel || "关键角色"}</p>
+                        <p className="relationship-meta">{item.character.gender} / {character?.roleLabel || "关键角色"}</p>
                       </div>
                     </div>
                     <div className="metric-chip-row">
@@ -447,13 +451,14 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
           </section>
 
           <section className="panel session-panel">
-            <div className="section-header"><div><p className="eyebrow">剧情分支</p><h2>故事线管理</h2></div></div>
+            <div className="section-header"><div><p className="eyebrow">剧情分支</p><h2>章节存档</h2></div></div>
             <div className="session-list">
-              {sessions.map((session) => (
+              {sessions.map((session, index) => (
                 <div key={session.id} className="session-row">
                   <button className={`session-item ${session.id === activeSession.id ? "active" : ""}`} onClick={() => switchSession(session.id)} disabled={loadingSessionId === session.id || isWorking || Boolean(deletingSessionId)}>
+                    <span>第 {index + 1} 章</span>
                     <strong>{session.title}</strong>
-                    <span>{loadingSessionId === session.id ? "切换中..." : `${getModelLabel(session.model)} · ${session.isSaved ? "已存档" : "临时"}`}</span>
+                    <small>{loadingSessionId === session.id ? "切换中..." : `${getModelLabel(session.model)} / ${session.isSaved ? "已存档" : "临时"}`}</small>
                   </button>
                   <button className="session-delete-button" type="button" onClick={() => deleteSession(session.id)} disabled={Boolean(deletingSessionId) || isWorking}>
                     {deletingSessionId === session.id ? "删除中..." : "删除"}
@@ -465,62 +470,68 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
         </aside>
 
         <section className="story-main">
-          <div className="story-stage">
-            <section className="chat-stage panel">
-              <div className="chat-toolbar">
-                <div><p className="eyebrow">剧情流</p><h2>继续这段故事</h2></div>
-                <div className="chat-toolbar-actions">
-                  <span className={`inline-status ${feedbackTone}`}>{error || feedback}</span>
-                  <button className="ghost-button" type="button" onClick={() => setIsStageInfoOpen(true)}>剧情信息</button>
-                  <button className="ghost-button" type="button" onClick={saveCurrentSession} disabled={isWorking || activeSession.isSaved}>{activeSession.isSaved ? "已存档" : "保存进度"}</button>
-                  <button className="ghost-button" type="button" onClick={() => { window.location.href = "/"; }}>返回选择页</button>
-                  <button className="ghost-button" type="button" onClick={() => setIsSettingsOpen(true)}>幕后控制台</button>
+          <section className="chat-stage panel">
+            <div className="chat-toolbar">
+              <div>
+                <p className="eyebrow">{activeSession.world.name}</p>
+                <h2>{activeSession.sceneState.currentScene}</h2>
+              </div>
+              <div className="chat-toolbar-actions">
+                <span className={`inline-status ${feedbackTone}`}>{error || feedback}</span>
+                <button className="ghost-button" type="button" onClick={() => setDrawerView("stage")}>回忆</button>
+                <button className="ghost-button" type="button" onClick={saveCurrentSession} disabled={isWorking || activeSession.isSaved}>{activeSession.isSaved ? "已存档" : "保存"}</button>
+                <button className="ghost-button" type="button" onClick={() => { window.location.href = "/"; }}>书架</button>
+                <button className="ghost-button" type="button" onClick={() => setDrawerView("backstage")}>幕后</button>
+              </div>
+            </div>
+
+            <div ref={chatStreamRef} className="chat-stream narrative-stream">
+              {activeSession.messages.length === 0 ? (
+                <div className="empty-state narrative-empty">
+                  <div className="empty-copy">
+                    <h3>从一句试探开始。</h3>
+                    <p>输入对白或行动，系统会推进场景、关系和记忆。</p>
+                  </div>
+                  <div className="starter-list">
+                    {STARTER_PROMPTS.map((prompt) => <button key={prompt} className="starter-button" onClick={() => sendMessage(prompt)} disabled={isWorking} type="button">{prompt}</button>)}
+                  </div>
                 </div>
-              </div>
-
-              <div ref={chatStreamRef} className="chat-stream narrative-stream">
-                {activeSession.messages.length === 0 ? (
-                  <div className="empty-state narrative-empty">
-                    <div className="empty-copy"><h3>从一句试探开始。</h3><p>输入对白或动作，系统会推进场景、关系和记忆。</p></div>
-                    <div className="starter-list">
-                      {STARTER_PROMPTS.map((prompt) => <button key={prompt} className="starter-button" onClick={() => sendMessage(prompt)} disabled={isWorking} type="button">{prompt}</button>)}
+              ) : (
+                <article className="latest-story-card">
+                  <div className="story-card-header">
+                    <div>
+                      <p className="eyebrow">最新剧情</p>
+                      <h3>{activeSession.sceneState.currentScene}</h3>
                     </div>
+                    <div className="story-card-meta"><span>{activeSession.sceneState.currentTime}</span><span>{activeSession.sceneState.atmosphere}</span></div>
                   </div>
-                ) : (
-                  <div className="single-card-layout">
-                    {latestAssistantMessage ? (
-                      <article className="latest-story-card">
-                        <div className="story-card-header"><div><p className="eyebrow">最新剧情推进</p><h3>{activeSession.sceneState.currentScene}</h3></div><div className="story-card-meta"><span>{activeSession.sceneState.currentTime}</span><span>{activeSession.sceneState.atmosphere}</span></div></div>
-                        {latestPlayerMessage ? <div className="player-action-echo"><span>你的行动</span><p>{latestPlayerMessage.content}</p></div> : null}
-                        <div className="story-card-body">{storyParagraphs.map((paragraph, index) => <p key={`${latestAssistantMessage.id}-${index}`}>{paragraph}</p>)}</div>
-                      </article>
-                    ) : null}
-                  </div>
-                )}
-              </div>
+                  {latestPlayerMessage ? <div className="player-action-echo"><span>你的行动</span><p>{latestPlayerMessage.content}</p></div> : null}
+                  {latestAssistantMessage ? <div className="story-card-body">{storyParagraphs.map((paragraph, index) => <p key={`${latestAssistantMessage.id}-${index}`}>{paragraph}</p>)}</div> : null}
+                </article>
+              )}
+            </div>
 
-              <div className="action-strip"><span className="action-strip-label">可以这样继续</span>{actionPrompts.map((prompt) => <button key={prompt} className="action-pill" type="button" onClick={() => setInput(prompt)} disabled={isWorking}>{prompt}</button>)}</div>
-              <div className="composer">
-                <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="输入一句自然语言..." rows={4} disabled={isWorking} />
-                <div className="composer-footer"><span className="muted">{isWorking ? "正在生成剧情..." : "按 Enter 发送，Shift + Enter 换行。"}</span><button className="primary-button" onClick={() => sendMessage()} disabled={isWorking || !input.trim()}>{isWorking ? "生成中..." : "发送剧情"}</button></div>
-              </div>
-            </section>
-          </div>
+            <div className="action-strip"><span className="action-strip-label">可以这样继续</span>{actionPrompts.map((prompt) => <button key={prompt} className="action-pill" type="button" onClick={() => setInput(prompt)} disabled={isWorking}>{prompt}</button>)}</div>
+            <div className="composer">
+              <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="输入一句自然语言..." rows={4} disabled={isWorking} />
+              <div className="composer-footer"><span className="muted">{isWorking ? "正在生成剧情..." : "Enter 发送，Shift + Enter 换行。"}</span><button className="primary-button" onClick={() => sendMessage()} disabled={isWorking || !input.trim()}>{isWorking ? "生成中..." : "发送剧情"}</button></div>
+            </div>
+          </section>
         </section>
       </main>
 
-      <div className={`console-backdrop ${isStageInfoOpen ? "open" : ""}`} onClick={() => setIsStageInfoOpen(false)} aria-hidden={!isStageInfoOpen} />
-      <aside className={`stage-info-drawer ${isStageInfoOpen ? "open" : ""}`}>
-        <div className="settings-drawer-header"><div><p className="eyebrow">剧情信息</p><h2>{activeSession.world.name}</h2></div><button className="ghost-button" type="button" onClick={() => setIsStageInfoOpen(false)}>收起</button></div>
+      <div className={`console-backdrop ${drawerView !== "none" ? "open" : ""}`} onClick={() => setDrawerView("none")} aria-hidden={drawerView === "none"} />
+      <aside className={`stage-info-drawer ${drawerView === "stage" ? "open" : ""}`}>
+        <div className="settings-drawer-header"><div><p className="eyebrow">回忆与场景</p><h2>{activeSession.world.name}</h2></div><button className="ghost-button" type="button" onClick={() => setDrawerView("none")}>收起</button></div>
         <div className="settings-drawer-scroll">
           <section className="settings-section"><h3>当前场景</h3><div className="scene-copy"><h2>{activeSession.sceneState.currentScene}</h2><p className="scene-summary">{activeSession.sceneState.summary}</p><div className="scene-detail-row"><span className="scene-badge">时间：{activeSession.sceneState.currentTime}</span><span className="scene-badge">氛围：{activeSession.sceneState.atmosphere}</span></div></div></section>
           <section className="settings-section"><h3>长期记忆</h3><p className="compact-text">{latestMemory}</p></section>
+          <section className="settings-section"><h3>世界前提</h3><p className="compact-text">{activeSession.world.premise}</p></section>
         </div>
       </aside>
 
-      <div className={`console-backdrop ${isSettingsOpen ? "open" : ""}`} onClick={() => setIsSettingsOpen(false)} aria-hidden={!isSettingsOpen} />
-      <aside className={`settings-drawer ${isSettingsOpen ? "open" : ""}`}>
-        <div className="settings-drawer-header"><div><p className="eyebrow">设定与配置</p><h2>幕后控制台</h2></div><button className="ghost-button" type="button" onClick={() => setIsSettingsOpen(false)}>收起</button></div>
+      <aside className={`settings-drawer ${drawerView === "backstage" ? "open" : ""}`}>
+        <div className="settings-drawer-header"><div><p className="eyebrow">设定与配置</p><h2>幕后工作台</h2></div><button className="ghost-button" type="button" onClick={() => setDrawerView("none")}>收起</button></div>
         <div className="settings-drawer-scroll">
           <section className="settings-section">
             <div className="subsection-header"><div><h3>世界设定</h3><p className="muted compact-text">修改后影响后续剧情生成。</p></div><button className="secondary-button" onClick={saveWorldSettings} disabled={isWorking} type="button">保存</button></div>
@@ -543,8 +554,8 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
           </section>
 
           <section className="settings-section">
-            <div className="subsection-header"><div><h3>模型与密钥</h3><p className="muted compact-text">网页密钥只保存在当前浏览器。</p></div><span className="status-pill">{apiKeySaved ? "网页密钥已保存" : "使用默认密钥"}</span></div>
-            <div className="form-stack"><label className="field-block"><span className="field-label">模型选择</span><select className="api-key-input" value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)} disabled={isWorking}>{initialData.availableModels.map((model) => <option key={model} value={model}>{getModelLabel(model)}</option>)}</select></label><label className="field-block"><span className="field-label">网页密钥</span><input className="api-key-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="输入 DeepSeek 密钥" autoComplete="off" /></label></div>
+            <div className="subsection-header"><div><h3>模型与密钥</h3><p className="muted compact-text">网页密钥只保存在当前设备。</p></div><span className="status-pill">{apiKeySaved ? "网页密钥已保存" : "尚未保存密钥"}</span></div>
+            <div className="form-stack"><label className="field-block"><span className="field-label">模型选择</span><select className="api-key-input" value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)} disabled={isWorking}>{initialData.availableModels.map((model) => <option key={model} value={model}>{getModelLabel(model)}</option>)}</select></label><label className="field-block"><span className="field-label">DeepSeek API Key</span><input className="api-key-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="输入玩家自己的 DeepSeek Key" autoComplete="off" /></label></div>
             <div className="inline-actions"><button className="secondary-button" onClick={saveApiKey} type="button">保存密钥</button><button className="ghost-button" onClick={clearApiKey} type="button">清除</button></div>
           </section>
         </div>
