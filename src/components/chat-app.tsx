@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { RELATIONSHIP_MAX, clampRelationshipMetric, getRelationshipStage } from "@/lib/relationship-scale";
 import { buildSessionDeletePlan, removeSessionFromList } from "@/lib/session-delete";
 import { buildSessionUrl } from "@/lib/session-url";
@@ -124,16 +124,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     chatStreamRef.current?.scrollTo({ top: chatStreamRef.current.scrollHeight, behavior: "smooth" });
   }, [activeSession.id, activeSession.messages]);
 
-  const latestAssistantMessage = useMemo(
-    () => [...activeSession.messages].reverse().find((message) => message.role === "ASSISTANT"),
-    [activeSession.messages],
-  );
-  const latestPlayerMessage = useMemo(
-    () => [...activeSession.messages].reverse().find((message) => message.role === "USER"),
-    [activeSession.messages],
-  );
   const latestMemory = activeSession.memorySummaries.at(-1)?.content || "暂无长期记忆。";
-  const storyParagraphs = latestAssistantMessage ? splitParagraphs(latestAssistantMessage.content) : [];
   const actionPrompts = activeSession.suggestedPrompts.length ? activeSession.suggestedPrompts : STARTER_PROMPTS;
 
   function updateFeedback(message: string, tone: FeedbackTone = "default") {
@@ -497,17 +488,28 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                   </div>
                 </div>
               ) : (
-                <article className="latest-story-card">
-                  <div className="story-card-header">
-                    <div>
-                      <p className="eyebrow">最新剧情</p>
-                      <h3>{activeSession.sceneState.currentScene}</h3>
-                    </div>
-                    <div className="story-card-meta"><span>{activeSession.sceneState.currentTime}</span><span>{activeSession.sceneState.atmosphere}</span></div>
-                  </div>
-                  {latestPlayerMessage ? <div className="player-action-echo"><span>你的行动</span><p>{latestPlayerMessage.content}</p></div> : null}
-                  {latestAssistantMessage ? <div className="story-card-body">{storyParagraphs.map((paragraph, index) => <p key={`${latestAssistantMessage.id}-${index}`}>{paragraph}</p>)}</div> : null}
-                </article>
+                <div className="conversation-flow">
+                  {activeSession.messages.map((message) => {
+                    const paragraphs = splitParagraphs(message.content);
+                    if (message.role === "USER") {
+                      return (
+                        <article key={message.id} className="dialogue-row player-dialogue">
+                          <div className="player-action-bubble">
+                            <span>你的行动</span>
+                            <p>{message.content}</p>
+                          </div>
+                        </article>
+                      );
+                    }
+                    return (
+                      <article key={message.id} className="dialogue-row assistant-dialogue">
+                        <div className="assistant-story-text">
+                          {paragraphs.map((paragraph, index) => <p key={`${message.id}-${index}`}>{paragraph}</p>)}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
