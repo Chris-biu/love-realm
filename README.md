@@ -32,7 +32,7 @@ npm install
 复制 `.env.example` 为 `.env`，至少填写：
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="file:C:/Users/your-name/AppData/Local/love-realm/love-realm.db"
 DEEPSEEK_API_KEY="你的 DeepSeek Key"
 DEEPSEEK_BASE_URL="https://api.deepseek.com"
 DEFAULT_DEEPSEEK_MODEL="deepseek-v4-flash"
@@ -43,9 +43,14 @@ DEFAULT_DEEPSEEK_MODEL="deepseek-v4-flash"
 3. 初始化数据库
 
 ```bash
+npm run setup:local
 npm run db:push
 npm run db:seed
 ```
+
+建议先运行 `npm run setup:local` 生成本机 `.env`。脚本会把 SQLite 数据库放到系统用户数据目录，例如 Windows 下的 `C:\Users\<you>\AppData\Local\love-realm\love-realm.db`，避免游玩记录落在项目仓库里。
+
+注意：`npm run db:seed` 会重置世界观、角色和会话数据。已有游玩记录时，只需要在模型变更后运行 `npm run db:push`，不要重新 seed。
 
 4. 启动开发环境
 
@@ -120,6 +125,6 @@ src/
 ## 验证命令
 
 ```bash
-node --import tsx --test src\lib\status-metrics.test.ts src\lib\relationship-scale.test.ts src\lib\story-schema.test.ts src\lib\suggested-prompts.test.ts src\lib\session-delete.test.ts src\lib\session-url.test.ts
+npm run test:unit
 npm run build
 ```

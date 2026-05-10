@@ -6,6 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
+    "setup:local": "node scripts/setup-local-env.mjs",
+    "test:unit": "node --test scripts/setup-local-env.test.mjs && node --import tsx --test src\\lib\\status-metrics.test.ts src\\lib\\relationship-scale.test.ts src\\lib\\story-schema.test.ts src\\lib\\suggested-prompts.test.ts src\\lib\\session-delete.test.ts src\\lib\\session-url.test.ts",
     "postinstall": "prisma generate",
     "db:push": "prisma db push && prisma generate",
     "db:seed": "prisma db seed"

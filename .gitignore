@@ -11,3 +11,9 @@ dev.db-journal
 .npm-cache
 .tools
 docs/superpowers
+/.data
+/data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
