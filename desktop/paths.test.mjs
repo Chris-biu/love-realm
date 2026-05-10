@@ -50,11 +50,12 @@ test("resolves standalone server from project build during local desktop runs", 
 
 test("finds the next available port when the preferred desktop port is occupied", async () => {
   const server = createServer();
-  await new Promise((resolve) => server.listen(DESKTOP_PORT, "127.0.0.1", resolve));
+  const preferredPort = await findAvailablePort(DESKTOP_PORT + 100);
+  await new Promise((resolve) => server.listen(preferredPort, "127.0.0.1", resolve));
 
   try {
-    const port = await findAvailablePort(DESKTOP_PORT);
-    assert.equal(port, DESKTOP_PORT + 1);
+    const port = await findAvailablePort(preferredPort);
+    assert.equal(port, preferredPort + 1);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }

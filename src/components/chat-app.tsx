@@ -483,9 +483,6 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                     <h3>从一句试探开始。</h3>
                     <p>输入对白或行动，系统会推进场景、关系和记忆。</p>
                   </div>
-                  <div className="starter-list">
-                    {STARTER_PROMPTS.map((prompt) => <button key={prompt} className="starter-button" onClick={() => sendMessage(prompt)} disabled={isWorking} type="button">{prompt}</button>)}
-                  </div>
                 </div>
               ) : (
                 <div className="conversation-flow">

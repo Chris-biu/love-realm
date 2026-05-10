@@ -206,7 +206,6 @@ select {
 .narrative-item,
 .settings-section,
 .memory-glance,
-.starter-button,
 .character-editor-card {
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -730,7 +729,6 @@ select {
 .primary-button,
 .secondary-button,
 .ghost-button,
-.starter-button,
 .console-fab,
 .action-pill,
 .session-item,
@@ -741,7 +739,6 @@ select {
 .primary-button,
 .secondary-button,
 .ghost-button,
-.starter-button,
 .console-fab {
   border-radius: 999px;
   padding: 10px 16px;
@@ -768,7 +765,6 @@ select {
 .primary-button:hover,
 .secondary-button:hover,
 .ghost-button:hover,
-.starter-button:hover,
 .console-fab:hover,
 .action-pill:hover,
 .session-item:hover,
@@ -780,7 +776,6 @@ select {
 .secondary-button:disabled,
 .ghost-button:disabled,
 .session-delete-button:disabled,
-.starter-button:disabled,
 .action-pill:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -807,20 +802,6 @@ select {
   margin-top: 10px;
   color: var(--muted);
   line-height: 1.8;
-}
-
-.starter-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: min(100%, 620px);
-}
-
-.starter-button {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.78);
-  text-align: left;
-  color: var(--ink);
 }
 
 .settings-drawer {
