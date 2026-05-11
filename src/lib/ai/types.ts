@@ -1,6 +1,6 @@
-import type { NarrativeTurn } from "@/lib/story-schema";
+import type { HiddenStateUpdate } from "@/lib/story-schema";
 
-export type GenerateTurnInput = {
+export type GenerateVisibleReplyInput = {
   model: string;
   systemPrompt: string;
   userPrompt: string;
@@ -8,7 +8,15 @@ export type GenerateTurnInput = {
   minimumReplyLength?: number;
 };
 
+export type GenerateStateUpdateInput = {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  apiKey?: string;
+};
+
 export interface ModelAdapter {
   readonly provider: string;
-  generateTurn(input: GenerateTurnInput): Promise<NarrativeTurn>;
+  generateVisibleReply(input: GenerateVisibleReplyInput): Promise<string>;
+  generateStateUpdate(input: GenerateStateUpdateInput): Promise<HiddenStateUpdate>;
 }

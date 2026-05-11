@@ -27,28 +27,43 @@ function buildNarrativeTurnSchema(minimumReplyLength: number) {
   });
 }
 
-export function parseNarrativeTurn(rawText: string, options?: { minimumReplyLength?: number }): NarrativeTurn {
+function parseJsonObject(rawText: string, emptyMessage: string) {
   const trimmed = rawText.trim();
-  const schema = buildNarrativeTurnSchema(normalizeMinimumReplyLength(options?.minimumReplyLength));
 
   try {
-    const direct = schema.safeParse(JSON.parse(trimmed));
-    if (direct.success) {
-      return direct.data;
-    }
+    return JSON.parse(trimmed);
   } catch {
-    // 某些 provider 可能会在 JSON 外再包一层代码块或说明文字，继续做抽取。
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (!match) {
+      throw new Error(emptyMessage);
+    }
+    return JSON.parse(match[0]);
+  }
+}
+
+export function parseHiddenStateUpdate(rawText: string): HiddenStateUpdate {
+  const parsed = parseJsonObject(rawText, "模型没有返回可解析的状态 JSON。");
+  const candidate =
+    parsed && typeof parsed === "object" && "hiddenStateUpdate" in parsed
+      ? (parsed as { hiddenStateUpdate: unknown }).hiddenStateUpdate
+      : parsed;
+  const result = hiddenStateUpdateSchema.safeParse(candidate);
+
+  if (!result.success) {
+    throw new Error(`模型返回的状态 JSON 结构不符合预期：${result.error.message}`);
   }
 
-  const match = trimmed.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error("模型没有返回可解析的 JSON。");
+  return result.data;
+}
+
+export function parseNarrativeTurn(rawText: string, options?: { minimumReplyLength?: number }): NarrativeTurn {
+  const schema = buildNarrativeTurnSchema(normalizeMinimumReplyLength(options?.minimumReplyLength));
+  const parsed = parseJsonObject(rawText, "模型没有返回可解析的 JSON。");
+  const result = schema.safeParse(parsed);
+
+  if (!result.success) {
+    throw new Error(`模型返回的 JSON 结构不符合预期：${result.error.message}`);
   }
 
-  const extracted = schema.safeParse(JSON.parse(match[0]));
-  if (!extracted.success) {
-    throw new Error(`模型返回的 JSON 结构不符合预期：${extracted.error.message}`);
-  }
-
-  return extracted.data;
+  return result.data;
 }

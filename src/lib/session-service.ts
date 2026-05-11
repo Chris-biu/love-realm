@@ -8,7 +8,7 @@ import {
   normalizeMinimumReplyLength,
 } from "@/lib/config";
 import { getAdapter } from "@/lib/ai";
-import { buildPrompts } from "@/lib/prompt";
+import { buildNarrativePrompts, buildStateUpdatePrompts } from "@/lib/prompt";
 import { prisma } from "@/lib/prisma";
 import {
   applyMetricDeltas,
@@ -627,8 +627,22 @@ export async function sendTurn(params: { sessionId: string; content: string; mod
   const adapter = getAdapter(bundle.provider);
   const model = normalizeDeepSeekModel(params.model || bundle.model || DEFAULT_DEEPSEEK_MODEL);
   const minimumReplyLength = normalizeMinimumReplyLength(params.minimumReplyLength ?? DEFAULT_MINIMUM_REPLY_LENGTH);
-  const prompts = buildPrompts(bundle, params.content, { minimumReplyLength });
-  const generated = await adapter.generateTurn({ model, systemPrompt: prompts.systemPrompt, userPrompt: prompts.userPrompt, apiKey: params.apiKey, minimumReplyLength });
+  const narrativePrompts = buildNarrativePrompts(bundle, params.content, { minimumReplyLength });
+  const visibleReply = await adapter.generateVisibleReply({
+    model,
+    systemPrompt: narrativePrompts.systemPrompt,
+    userPrompt: narrativePrompts.userPrompt,
+    apiKey: params.apiKey,
+    minimumReplyLength,
+  });
+  const statePrompts = buildStateUpdatePrompts(bundle, params.content, visibleReply);
+  const hiddenStateUpdate = await adapter.generateStateUpdate({
+    model,
+    systemPrompt: statePrompts.systemPrompt,
+    userPrompt: statePrompts.userPrompt,
+    apiKey: params.apiKey,
+  });
+  const generated = { visibleReply, hiddenStateUpdate };
   const turnNumber = bundle.messages.at(-1)?.turnNumber ? bundle.messages.at(-1)!.turnNumber + 1 : 1;
   const relationshipUpdates = computeRelationshipUpdates(bundle.relationships, bundle.characters, bundle.statusMetrics, generated.hiddenStateUpdate.relationshipChanges);
   const sceneSnapshot = buildSceneSnapshot(bundle, turnNumber, generated.hiddenStateUpdate);
