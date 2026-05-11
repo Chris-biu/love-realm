@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS "RelationshipState" (
   "sessionId" TEXT NOT NULL,
   "characterId" TEXT NOT NULL,
   "metrics" JSONB NOT NULL,
+  "dynamicProfile" JSONB,
   "note" TEXT,
   "updatedAt" DATETIME NOT NULL,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

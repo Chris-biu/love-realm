@@ -16,7 +16,7 @@ import {
   type CharacterRuntimeState,
   type CharacterRuntimeStateUpdate,
 } from "@/lib/character-runtime-state";
-import { prisma } from "@/lib/prisma";
+import { ensureDatabaseSchema, prisma } from "@/lib/prisma";
 import {
   applyMetricDeltas,
   buildInitialMetricRecord,
@@ -358,6 +358,7 @@ async function createSession(worldId: string, model = DEFAULT_DEEPSEEK_MODEL, is
 }
 
 export async function getWorldSelectionData(): Promise<WorldSelectionData> {
+  await ensureDatabaseSchema();
   const worlds = await prisma.world.findMany({
     orderBy: { updatedAt: "desc" },
     include: {
@@ -408,6 +409,7 @@ function buildSlug(value: string, fallback: string) {
 }
 
 export async function createWorldCard(input: { name?: string; description?: string; premise?: string; defaultScene?: string }) {
+  await ensureDatabaseSchema();
   const name = input.name?.trim() || "New world";
   await prisma.world.create({
     data: {
@@ -445,6 +447,7 @@ export async function createWorldCard(input: { name?: string; description?: stri
 }
 
 export async function getAppBootstrap(activeSessionId?: string | null): Promise<AppBootstrap> {
+  await ensureDatabaseSchema();
   const requestedSession = activeSessionId
     ? await prisma.session.findUnique({ where: { id: activeSessionId }, include: sessionInclude })
     : null;
@@ -463,12 +466,14 @@ export async function getAppBootstrap(activeSessionId?: string | null): Promise<
 }
 
 export async function listSessions(worldId?: string) {
+  await ensureDatabaseSchema();
   const resolvedWorldId = worldId || (await getDefaultWorld()).id;
   const sessions = await prisma.session.findMany({ where: { worldId: resolvedWorldId }, orderBy: { updatedAt: "desc" } });
   return sessions.map(mapSessionListItem);
 }
 
 export async function createNewSession(input: string | { model?: string; worldId?: string; isSaved?: boolean } = DEFAULT_DEEPSEEK_MODEL) {
+  await ensureDatabaseSchema();
   const model = typeof input === "string" ? input : input.model || DEFAULT_DEEPSEEK_MODEL;
   const worldId = typeof input === "string" ? undefined : input.worldId;
   const isSaved = typeof input === "string" ? false : input.isSaved ?? false;
@@ -479,17 +484,20 @@ export async function createNewSession(input: string | { model?: string; worldId
 }
 
 export async function saveSessionById(sessionId: string) {
+  await ensureDatabaseSchema();
   const session = await prisma.session.update({ where: { id: sessionId }, data: { isSaved: true }, include: sessionInclude });
   return { session: mapSession(session), sessions: await listSessions(session.worldId) };
 }
 
 export async function getSessionDetail(sessionId: string) {
+  await ensureDatabaseSchema();
   const session = await prisma.session.findUnique({ where: { id: sessionId }, include: sessionInclude });
   if (!session) throw new Error("Session does not exist.");
   return mapSession(session);
 }
 
 export async function updateWorldSettings(worldId: string, input: { name?: string; description?: string; premise?: string; storyGuide?: string; statusMetrics?: StatusMetricDefinition[] }) {
+  await ensureDatabaseSchema();
   const normalizedMetrics = input.statusMetrics === undefined ? undefined : normalizeStatusMetrics(input.statusMetrics);
   const world = await prisma.world.update({
     where: { id: worldId },
@@ -529,6 +537,7 @@ export async function updateWorldSettings(worldId: string, input: { name?: strin
 }
 
 export async function updateCharacterSettings(characterId: string, input: { name?: string; gender?: string; roleLabel?: string; publicSummary?: string; secretSummary?: string; personalityTags?: string[] }) {
+  await ensureDatabaseSchema();
   const character = await prisma.character.update({
     where: { id: characterId },
     data: {
@@ -553,6 +562,7 @@ export async function updateCharacterSettings(characterId: string, input: { name
 }
 
 export async function updateCharacterRuntimeState(input: { sessionId: string; characterId: string; runtimeState: CharacterRuntimeStateUpdate }) {
+  await ensureDatabaseSchema();
   const relationship = await prisma.relationshipState.findUnique({
     where: { sessionId_characterId: { sessionId: input.sessionId, characterId: input.characterId } },
   });
@@ -569,6 +579,7 @@ export async function updateCharacterRuntimeState(input: { sessionId: string; ch
 }
 
 export async function createCharacterForWorld(input: { worldId: string; sessionId: string; name?: string; gender?: string; roleLabel?: string; publicSummary?: string; secretSummary?: string; personalityTags?: string[] }) {
+  await ensureDatabaseSchema();
   const world = await prisma.world.findUnique({ where: { id: input.worldId } });
   if (!world) throw new Error("World does not exist.");
   const statusMetrics = normalizeStatusMetrics(world.statusMetrics);
@@ -604,6 +615,7 @@ export async function createCharacterForWorld(input: { worldId: string; sessionI
 }
 
 export async function deleteCharacterById(characterId: string, sessionId: string) {
+  await ensureDatabaseSchema();
   const character = await prisma.character.findUnique({ where: { id: characterId } });
   if (!character) throw new Error("Character does not exist.");
   const characterCount = await prisma.character.count({ where: { worldId: character.worldId } });
@@ -613,6 +625,7 @@ export async function deleteCharacterById(characterId: string, sessionId: string
 }
 
 export async function deleteSessionById(sessionId: string, options?: { hydrateNextSession?: boolean }) {
+  await ensureDatabaseSchema();
   const target = await prisma.session.findUnique({ where: { id: sessionId } });
   if (!target) throw new Error("Session does not exist.");
   await prisma.session.delete({ where: { id: sessionId } });
@@ -670,6 +683,7 @@ function buildSessionTitle(previousTitle: string, userMessage: string, turnNumbe
 }
 
 export async function sendTurn(params: { sessionId: string; content: string; model?: string; apiKey?: string; minimumReplyLength?: number }) {
+  await ensureDatabaseSchema();
   const bundle = await getSessionDetail(params.sessionId);
   const adapter = getAdapter(bundle.provider);
   const model = normalizeDeepSeekModel(params.model || bundle.model || DEFAULT_DEEPSEEK_MODEL);

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { createRequire } from "node:module";
 
@@ -24,6 +25,11 @@ test("stores desktop database inside Electron userData", () => {
     resolveDatabaseUrl("C:\\Users\\demo\\AppData\\Roaming\\Love Realm"),
     "file:C:/Users/demo/AppData/Roaming/Love Realm/love-realm.db",
   );
+});
+
+test("desktop template schema includes dynamic character profile storage", () => {
+  const initSql = readFileSync(new URL("../prisma/init.sql", import.meta.url), "utf8");
+  assert.match(initSql, /"dynamicProfile"\s+JSONB/);
 });
 
 test("resolves standalone server from resources when packaged", () => {
