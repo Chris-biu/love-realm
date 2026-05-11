@@ -4,18 +4,21 @@
   <img src="./desktop/icon.png" alt="Love Realm app icon" width="180" />
 </p>
 
-Love Realm 是一个基于 `Next.js + TypeScript + SQLite + Prisma + Electron` 的多角色恋爱养成互动叙事 MVP。玩家通过自然语言推进剧情，系统会持续保存会话、场景、角色关系、长期记忆和 AI 生成的结构化状态更新。
+Love Realm 是一个基于 `Next.js + TypeScript + SQLite + Prisma + Electron` 的多角色恋爱养成互动叙事 MVP。玩家通过自然语言推进剧情，系统会持续保存会话、场景、角色关系、长期记忆和 AI 生成的结构化状态更新，并把多轮互动整理成可阅读的小说章节。
 
 当前版本接入 DeepSeek，并保留后续扩展其他模型 provider 的接口边界。
 
 ## 已实现能力
 
 - 沉浸式剧情流聊天页面，主舞台改为连续阅读式对话流。
+- 长篇剧情生成，默认每轮可见剧情不少于 3000 个中文字符。
+- 玩家可设置本轮最低回复字数，范围为 `300-20000`。
 - 世界书架、世界详情、角色预览、章节存档与读档。
 - DeepSeek 模型选择，默认 `deepseek-v4-flash`。
 - 浏览器页面或桌面版内填写玩家自己的 DeepSeek API Key。
 - 会话创建、切换、删除、保存和刷新后继续。
 - 世界设定、角色设定、状态栏、模型与 API Key 收纳在幕后工作台。
+- 导出为小说，支持快速 Markdown 草稿和 AI 润色 Markdown。
 - 关系状态以数值条和阶段文案展示。
 - 当前场景、当前时间、氛围、摘要、长期记忆随剧情推进更新。
 - AI 每轮回复拆分为 `visibleReply` 和 `hiddenStateUpdate`。
@@ -87,6 +90,15 @@ C:\Users\<you>\AppData\Roaming\Love Realm\love-realm.db
 
 桌面版不会内置开发者的 DeepSeek API Key。玩家需要在游戏内输入自己的 DeepSeek API Key，该 Key 会保存在玩家本机的 Electron Local Storage 中。
 
+## 小说导出
+
+当前会话可以在“幕后”中导出为 Markdown 小说文件：
+
+- 快速草稿导出：不调用 AI，将玩家行动与 AI 剧情回复整理成小说式 Markdown。
+- AI 润色导出：调用玩家自己的 DeepSeek API Key，把多轮互动润色为更接近正常小说阅读体验的章节文本。
+- 导出范围支持全部会话或最近 N 轮。
+- 导出内容只使用玩家可见剧情、玩家行动、场景和必要记忆摘要，不导出隐藏状态数据。
+
 应用图标资源：
 
 ```text
@@ -129,6 +141,7 @@ src/
 - `PATCH /api/sessions/[sessionId]`：保存当前会话。
 - `DELETE /api/sessions/[sessionId]`：删除剧情分支。
 - `POST /api/sessions/[sessionId]/messages`：发送玩家输入并生成剧情。
+- `POST /api/sessions/[sessionId]/export-novel`：导出当前会话为小说 Markdown。
 - `GET /api/worlds`：获取世界书架数据。
 - `PATCH /api/worlds/[worldId]`：保存世界设定和状态栏模板。
 - `POST /api/characters`：新增主要角色。
@@ -152,12 +165,12 @@ src/
     "currentScene": "新的当前场景",
     "currentTime": "新的当前时间",
     "atmosphere": "新的当前氛围",
-    "suggestedActions": ["建议一", "建议二", "建议三"]
+      "suggestedActions": ["建议一", "建议二", "建议三"]
   }
 }
 ```
 
-`relationshipChanges` 只能使用当前世界状态栏模板中存在的字段，最终状态值会限制在 `0-10`。
+`relationshipChanges` 只能使用当前世界状态栏模板中存在的字段，最终状态值会限制在 `0-10`。默认 `visibleReply` 至少需要 3000 个中文字符；玩家可以在界面中把本轮最低字数调整到 `300-20000`。
 
 ## 验证命令
 

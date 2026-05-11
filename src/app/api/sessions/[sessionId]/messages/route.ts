@@ -14,6 +14,7 @@ export async function POST(request: Request, context: RouteContext) {
       content?: string;
       model?: string;
       apiKey?: string;
+      minimumReplyLength?: number;
     };
 
     if (!body.content?.trim()) {
@@ -25,6 +26,7 @@ export async function POST(request: Request, context: RouteContext) {
       content: body.content.trim(),
       model: body.model,
       apiKey: body.apiKey,
+      minimumReplyLength: body.minimumReplyLength,
     });
 
     return NextResponse.json(payload);

@@ -1,10 +1,12 @@
-﻿import type { SessionBundle } from "@/lib/session-service";
+﻿import { DEFAULT_MINIMUM_REPLY_LENGTH, normalizeMinimumReplyLength } from "@/lib/config";
+import type { SessionBundle } from "@/lib/session-service";
 
 function formatRelationshipMetrics(metrics: Record<string, number>) {
   return JSON.stringify(metrics, null, 2);
 }
 
-export function buildPrompts(bundle: SessionBundle, userInput: string) {
+export function buildPrompts(bundle: SessionBundle, userInput: string, options?: { minimumReplyLength?: number }) {
+  const minimumReplyLength = normalizeMinimumReplyLength(options?.minimumReplyLength ?? DEFAULT_MINIMUM_REPLY_LENGTH);
   const latestScene = bundle.sceneState;
   const statusMetricText = bundle.statusMetrics.length
     ? bundle.statusMetrics.map((metric) => `- ${metric.label}：key=${metric.key}`).join("\n")
@@ -69,7 +71,7 @@ export function buildPrompts(bundle: SessionBundle, userInput: string) {
     "}",
     "",
     "强制要求：",
-    "1. visibleReply 必须不少于 300 个中文字符。宁可写得更完整，也不要写短回复。",
+    `1. visibleReply 必须不少于 ${minimumReplyLength} 个中文字符。宁可写得更完整，也不要写短回复。`,
     "2. visibleReply 必须写成一段完整的剧情推进，至少包含：场景变化、环境或氛围描写、两个以上角色的动作或神态、至少一段角色对白、关系变化带来的情绪张力。",
     "3. 回复风格要自然流畅，有画面感，有情绪推进，不要写成说明文。",
     "4. hiddenStateUpdate.currentScene、currentTime、atmosphere 每轮都要根据剧情重新判断并填写。",
@@ -80,6 +82,7 @@ export function buildPrompts(bundle: SessionBundle, userInput: string) {
     "9. memorySummary 要简洁总结这一轮最值得长期记住的剧情信息。",
     "10. suggestedActions 必须返回 3 条简短、可直接点击的剧情建议，要紧贴当前上下文。",
     "11. 如果玩家输入很短，也必须根据当前上下文补足画面、对白和心理张力，不能只回答一句话。",
+    `12. 当前玩家设置的本轮最低回复字数是 ${minimumReplyLength}，必须满足该长度要求。`,
   ].join("\n");
 
   const userPrompt = [

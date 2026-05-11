@@ -9,7 +9,7 @@
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:dist": "npm run desktop:prepare && electron-packager .desktop/electron-app \"Love Realm\" --platform=win32 --arch=x64 --out=dist-desktop --overwrite --electron-version=42.0.1 --icon=desktop/icon.ico --extra-resource=.desktop/standalone --extra-resource=.desktop/db-template",
     "setup:local": "node scripts/setup-local-env.mjs",
-    "test:unit": "node --test desktop\\paths.test.mjs scripts\\setup-local-env.test.mjs && node --import tsx --test src\\lib\\status-metrics.test.ts src\\lib\\relationship-scale.test.ts src\\lib\\story-schema.test.ts src\\lib\\suggested-prompts.test.ts src\\lib\\session-delete.test.ts src\\lib\\session-url.test.ts",
+    "test:unit": "node --test desktop\\paths.test.mjs scripts\\setup-local-env.test.mjs && node --import tsx --test src\\lib\\status-metrics.test.ts src\\lib\\relationship-scale.test.ts src\\lib\\story-schema.test.ts src\\lib\\suggested-prompts.test.ts src\\lib\\session-delete.test.ts src\\lib\\session-url.test.ts src\\lib\\novel-export.test.ts",
     "postinstall": "prisma generate",
     "db:push": "prisma db push && prisma generate",
     "db:seed": "prisma db seed"

@@ -9,6 +9,17 @@ export const AVAILABLE_DEEPSEEK_MODELS = Array.from(
 
 export const DEEPSEEK_BASE_URL =
   process.env.DEEPSEEK_BASE_URL?.trim() || "https://api.deepseek.com";
+
+export const MINIMUM_REPLY_LENGTH_MIN = 300;
+export const MINIMUM_REPLY_LENGTH_MAX = 20000;
+export const DEFAULT_MINIMUM_REPLY_LENGTH = 3000;
+
+export function normalizeMinimumReplyLength(value?: number | null) {
+  if (!Number.isFinite(value ?? NaN)) return DEFAULT_MINIMUM_REPLY_LENGTH;
+  const rounded = Math.round(value!);
+  return Math.min(MINIMUM_REPLY_LENGTH_MAX, Math.max(MINIMUM_REPLY_LENGTH_MIN, rounded));
+}
+
 export function normalizeDeepSeekModel(model?: string | null) {
   if (model === "deepseek-chat" || model === "deepseek-reasoner") {
     return "deepseek-v4-flash";

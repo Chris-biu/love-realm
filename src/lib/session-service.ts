@@ -2,8 +2,10 @@ import { MessageRole, Prisma } from "@prisma/client";
 import {
   AVAILABLE_DEEPSEEK_MODELS,
   DEFAULT_DEEPSEEK_MODEL,
+  DEFAULT_MINIMUM_REPLY_LENGTH,
   DEFAULT_WORLD_SLUG,
   normalizeDeepSeekModel,
+  normalizeMinimumReplyLength,
 } from "@/lib/config";
 import { getAdapter } from "@/lib/ai";
 import { buildPrompts } from "@/lib/prompt";
@@ -620,12 +622,13 @@ function buildSessionTitle(previousTitle: string, userMessage: string, turnNumbe
   return userMessage.slice(0, 18) || previousTitle;
 }
 
-export async function sendTurn(params: { sessionId: string; content: string; model?: string; apiKey?: string }) {
+export async function sendTurn(params: { sessionId: string; content: string; model?: string; apiKey?: string; minimumReplyLength?: number }) {
   const bundle = await getSessionDetail(params.sessionId);
   const adapter = getAdapter(bundle.provider);
   const model = normalizeDeepSeekModel(params.model || bundle.model || DEFAULT_DEEPSEEK_MODEL);
-  const prompts = buildPrompts(bundle, params.content);
-  const generated = await adapter.generateTurn({ model, systemPrompt: prompts.systemPrompt, userPrompt: prompts.userPrompt, apiKey: params.apiKey });
+  const minimumReplyLength = normalizeMinimumReplyLength(params.minimumReplyLength ?? DEFAULT_MINIMUM_REPLY_LENGTH);
+  const prompts = buildPrompts(bundle, params.content, { minimumReplyLength });
+  const generated = await adapter.generateTurn({ model, systemPrompt: prompts.systemPrompt, userPrompt: prompts.userPrompt, apiKey: params.apiKey, minimumReplyLength });
   const turnNumber = bundle.messages.at(-1)?.turnNumber ? bundle.messages.at(-1)!.turnNumber + 1 : 1;
   const relationshipUpdates = computeRelationshipUpdates(bundle.relationships, bundle.characters, bundle.statusMetrics, generated.hiddenStateUpdate.relationshipChanges);
   const sceneSnapshot = buildSceneSnapshot(bundle, turnNumber, generated.hiddenStateUpdate);

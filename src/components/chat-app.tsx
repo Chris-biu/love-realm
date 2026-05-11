@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { RELATIONSHIP_MAX, clampRelationshipMetric, getRelationshipStage } from "@/lib/relationship-scale";
 import { buildSessionDeletePlan, removeSessionFromList } from "@/lib/session-delete";
 import { buildSessionUrl } from "@/lib/session-url";
+import { DEFAULT_MINIMUM_REPLY_LENGTH, MINIMUM_REPLY_LENGTH_MAX, MINIMUM_REPLY_LENGTH_MIN, normalizeMinimumReplyLength } from "@/lib/config";
 import type { AppBootstrap, SessionBundle, SessionListItem } from "@/lib/session-service";
 import type { StatusMetricDefinition } from "@/lib/status-metrics";
 
@@ -14,6 +15,7 @@ type ChatAppProps = {
 
 type FeedbackTone = "default" | "success" | "pending";
 type DrawerView = "none" | "stage" | "backstage";
+type NovelExportMode = "quick" | "polished";
 
 type WorldDraft = {
   name: string;
@@ -92,6 +94,9 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
   const [activeSession, setActiveSession] = useState<SessionBundle>(initialData.activeSession);
   const [selectedModel, setSelectedModel] = useState(initialData.activeSession.model);
   const [input, setInput] = useState("");
+  const [minimumReplyLength, setMinimumReplyLength] = useState(DEFAULT_MINIMUM_REPLY_LENGTH);
+  const [novelExportMode, setNovelExportMode] = useState<NovelExportMode>("polished");
+  const [novelExportTurns, setNovelExportTurns] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("剧情舞台已就绪。");
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("default");
@@ -374,7 +379,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
         await fetch(`/api/sessions/${activeSession.id}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, model: selectedModel, apiKey: apiKey.trim() || undefined }),
+          body: JSON.stringify({ content, model: selectedModel, apiKey: apiKey.trim() || undefined, minimumReplyLength }),
         }),
       );
       setSessions(payload.sessions);
@@ -385,6 +390,41 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     } catch (caughtError) {
       setInput(content);
       setError(caughtError instanceof Error ? caughtError.message : "发送消息失败。");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  function downloadMarkdown(fileName: string, markdown: string) {
+    const url = window.URL.createObjectURL(new Blob([markdown], { type: "text/markdown;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  async function exportNovel() {
+    setError(null);
+    setIsWorking(true);
+    updateFeedback(novelExportMode === "polished" ? "正在调用 AI 润色小说..." : "正在整理小说草稿...", "pending");
+    try {
+      const payload = await readJson<{ fileName: string; markdown: string; mode: NovelExportMode }>(
+        await fetch(`/api/sessions/${activeSession.id}/export-novel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: novelExportMode,
+            recentTurns: novelExportTurns > 0 ? novelExportTurns : undefined,
+            apiKey: apiKey.trim() || undefined,
+            model: selectedModel,
+          }),
+        }),
+      );
+      downloadMarkdown(payload.fileName, payload.markdown);
+      updateFeedback(payload.mode === "polished" ? "AI 润色小说已导出。" : "小说草稿已导出。", "success");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "导出小说失败。");
     } finally {
       setIsWorking(false);
     }
@@ -512,6 +552,20 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
 
             <div className="action-strip"><span className="action-strip-label">可以这样继续</span>{actionPrompts.map((prompt) => <button key={prompt} className="action-pill" type="button" onClick={() => setInput(prompt)} disabled={isWorking}>{prompt}</button>)}</div>
             <div className="composer">
+              <div className="reply-length-control">
+                <label>
+                  <span>本轮最低字数</span>
+                  <input
+                    type="number"
+                    min={MINIMUM_REPLY_LENGTH_MIN}
+                    max={MINIMUM_REPLY_LENGTH_MAX}
+                    step={100}
+                    value={minimumReplyLength}
+                    onChange={(event) => setMinimumReplyLength(normalizeMinimumReplyLength(Number(event.target.value)))}
+                    disabled={isWorking}
+                  />
+                </label>
+              </div>
               <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="输入一句自然语言..." rows={4} disabled={isWorking} />
               <div className="composer-footer"><span className="muted">{isWorking ? "正在生成剧情..." : "Enter 发送，Shift + Enter 换行。"}</span><button className="primary-button" onClick={() => sendMessage()} disabled={isWorking || !input.trim()}>{isWorking ? "生成中..." : "发送剧情"}</button></div>
             </div>
@@ -556,6 +610,25 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
             <div className="subsection-header"><div><h3>模型与密钥</h3><p className="muted compact-text">网页密钥只保存在当前设备。</p></div><span className="status-pill">{apiKeySaved ? "网页密钥已保存" : "尚未保存密钥"}</span></div>
             <div className="form-stack"><label className="field-block"><span className="field-label">模型选择</span><select className="api-key-input" value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)} disabled={isWorking}>{initialData.availableModels.map((model) => <option key={model} value={model}>{getModelLabel(model)}</option>)}</select></label><label className="field-block"><span className="field-label">DeepSeek API Key</span><input className="api-key-input" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="输入玩家自己的 DeepSeek Key" autoComplete="off" /></label></div>
             <div className="inline-actions"><button className="secondary-button" onClick={saveApiKey} type="button">保存密钥</button><button className="ghost-button" onClick={clearApiKey} type="button">清除</button></div>
+          </section>
+
+          <section className="settings-section">
+            <div className="subsection-header"><div><h3>导出为小说</h3><p className="muted compact-text">AI 润色会调用玩家自己的 DeepSeek API Key。</p></div></div>
+            <div className="form-stack">
+              <label className="field-block">
+                <span className="field-label">导出模式</span>
+                <select className="api-key-input" value={novelExportMode} onChange={(event) => setNovelExportMode(event.target.value as NovelExportMode)} disabled={isWorking}>
+                  <option value="polished">AI 润色导出</option>
+                  <option value="quick">快速草稿导出</option>
+                </select>
+              </label>
+              <label className="field-block">
+                <span className="field-label">导出范围</span>
+                <input className="api-key-input" type="number" min={0} max={200} step={1} value={novelExportTurns} onChange={(event) => setNovelExportTurns(Math.max(0, Math.min(200, Number(event.target.value) || 0)))} disabled={isWorking} />
+                <span className="muted compact-text">填 0 表示导出当前会话全部内容。</span>
+              </label>
+            </div>
+            <div className="inline-actions"><button className="secondary-button" onClick={exportNovel} type="button" disabled={isWorking || activeSession.messages.length === 0}>导出 Markdown</button></div>
           </section>
         </div>
       </aside>

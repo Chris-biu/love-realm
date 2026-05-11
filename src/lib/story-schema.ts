@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_MINIMUM_REPLY_LENGTH, normalizeMinimumReplyLength } from "@/lib/config";
 
 export const hiddenStateUpdateSchema = z.object({
   relationshipChanges: z.record(z.string(), z.number().int()).default({}),
@@ -12,18 +13,26 @@ export const hiddenStateUpdateSchema = z.object({
 });
 
 export const narrativeTurnSchema = z.object({
-  visibleReply: z.string().min(300, "visibleReply 至少需要 300 字"),
+  visibleReply: z.string().min(DEFAULT_MINIMUM_REPLY_LENGTH, `visibleReply 至少需要 ${DEFAULT_MINIMUM_REPLY_LENGTH} 字`),
   hiddenStateUpdate: hiddenStateUpdateSchema,
 });
 
 export type HiddenStateUpdate = z.infer<typeof hiddenStateUpdateSchema>;
 export type NarrativeTurn = z.infer<typeof narrativeTurnSchema>;
 
-export function parseNarrativeTurn(rawText: string): NarrativeTurn {
+function buildNarrativeTurnSchema(minimumReplyLength: number) {
+  return z.object({
+    visibleReply: z.string().min(minimumReplyLength, `visibleReply 至少需要 ${minimumReplyLength} 字`),
+    hiddenStateUpdate: hiddenStateUpdateSchema,
+  });
+}
+
+export function parseNarrativeTurn(rawText: string, options?: { minimumReplyLength?: number }): NarrativeTurn {
   const trimmed = rawText.trim();
+  const schema = buildNarrativeTurnSchema(normalizeMinimumReplyLength(options?.minimumReplyLength));
 
   try {
-    const direct = narrativeTurnSchema.safeParse(JSON.parse(trimmed));
+    const direct = schema.safeParse(JSON.parse(trimmed));
     if (direct.success) {
       return direct.data;
     }
@@ -36,7 +45,7 @@ export function parseNarrativeTurn(rawText: string): NarrativeTurn {
     throw new Error("模型没有返回可解析的 JSON。");
   }
 
-  const extracted = narrativeTurnSchema.safeParse(JSON.parse(match[0]));
+  const extracted = schema.safeParse(JSON.parse(match[0]));
   if (!extracted.success) {
     throw new Error(`模型返回的 JSON 结构不符合预期：${extracted.error.message}`);
   }

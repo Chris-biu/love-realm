@@ -56,7 +56,7 @@ export class DeepSeekAdapter implements ModelAdapter {
         messages,
         thinking: buildThinkingConfig(input.model),
         temperature: 0.9,
-        max_tokens: 2200,
+        max_tokens: 16000,
         response_format: {
           type: "json_object",
         },
@@ -75,6 +75,6 @@ export class DeepSeekAdapter implements ModelAdapter {
       throw new Error("DeepSeek 返回为空，未生成剧情结果。");
     }
 
-    return parseNarrativeTurn(content);
+    return parseNarrativeTurn(content, { minimumReplyLength: input.minimumReplyLength });
   }
 }

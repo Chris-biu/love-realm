@@ -668,6 +668,29 @@ select {
   background: linear-gradient(180deg, rgba(252, 245, 238, 0.88), rgba(252, 245, 238, 0.98));
 }
 
+.reply-length-control {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 8px;
+}
+
+.reply-length-control label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reply-length-control input {
+  width: 96px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+}
+
 .composer textarea,
 .field-block textarea,
 .api-key-input {

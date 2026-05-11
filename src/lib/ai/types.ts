@@ -5,6 +5,7 @@ export type GenerateTurnInput = {
   systemPrompt: string;
   userPrompt: string;
   apiKey?: string;
+  minimumReplyLength?: number;
 };
 
 export interface ModelAdapter {
