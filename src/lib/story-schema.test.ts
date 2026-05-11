@@ -8,7 +8,7 @@ function makeLongReply(length = DEFAULT_MINIMUM_REPLY_LENGTH) {
   return seed.repeat(Math.ceil(length / seed.length));
 }
 
-test("默认要求 visibleReply 不少于 3000 字并保留 3 个剧情建议", () => {
+test("默认要求 visibleReply 不少于默认最低字数并保留 3 个剧情建议", () => {
   const parsed = parseNarrativeTurn(
     JSON.stringify({
       visibleReply: makeLongReply(),

@@ -12,7 +12,7 @@ export const DEEPSEEK_BASE_URL =
 
 export const MINIMUM_REPLY_LENGTH_MIN = 300;
 export const MINIMUM_REPLY_LENGTH_MAX = 20000;
-export const DEFAULT_MINIMUM_REPLY_LENGTH = 3000;
+export const DEFAULT_MINIMUM_REPLY_LENGTH = 800;
 
 export function normalizeMinimumReplyLength(value?: number | null) {
   if (!Number.isFinite(value ?? NaN)) return DEFAULT_MINIMUM_REPLY_LENGTH;
