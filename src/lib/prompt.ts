@@ -1,5 +1,6 @@
 import { DEFAULT_MINIMUM_REPLY_LENGTH, normalizeMinimumReplyLength } from "@/lib/config";
 import type { SessionBundle } from "@/lib/session-service";
+import type { CharacterRuntimeState } from "@/lib/character-runtime-state";
 
 function formatRelationshipMetrics(metrics: Record<string, number>) {
   return JSON.stringify(metrics, null, 2);
@@ -7,8 +8,18 @@ function formatRelationshipMetrics(metrics: Record<string, number>) {
 
 function formatAllowedCharacters(bundle: SessionBundle) {
   return bundle.characters
-    .map((character) => `- ${character.name}（slug=${character.slug}，身份=${character.roleLabel}）`)
+    .map((character) => `- ${character.name}（slug=${character.slug}，初始身份标签=${character.roleLabel}）`)
     .join("\n");
+}
+
+function formatRuntimeState(runtimeState: CharacterRuntimeState) {
+  const lines: string[] = [];
+  if (runtimeState.currentIdentity.value) lines.push(`当前身份：${runtimeState.currentIdentity.value}（来源=${runtimeState.currentIdentity.source}）`);
+  if (runtimeState.currentRelationship.value) lines.push(`当前关系：${runtimeState.currentRelationship.value}（来源=${runtimeState.currentRelationship.source}）`);
+  if (runtimeState.attitudeTowardPlayer.value) lines.push(`对玩家态度：${runtimeState.attitudeTowardPlayer.value}（来源=${runtimeState.attitudeTowardPlayer.source}）`);
+  if (runtimeState.playerAddress.value) lines.push(`对玩家称呼：${runtimeState.playerAddress.value}（来源=${runtimeState.playerAddress.source}）`);
+  if (runtimeState.persistentFacts.value.length) lines.push(`不可遗忘事实：${runtimeState.persistentFacts.value.join("；")}（来源=${runtimeState.persistentFacts.source}）`);
+  return lines.length ? lines.join("\n") : "暂无动态档案";
 }
 
 function buildContextSections(bundle: SessionBundle, userInput: string) {
@@ -41,10 +52,12 @@ function buildContextSections(bundle: SessionBundle, userInput: string) {
         `角色：${character.name}`,
         `slug：${character.slug}`,
         `性别：${character.gender}`,
-        `身份：${character.roleLabel}`,
+        `初始身份标签：${character.roleLabel}`,
         `公开设定：${character.publicSummary}`,
         `隐藏动机：${character.secretSummary}`,
         `性格标签：${character.personalityTags.join("、")}`,
+        "当前动态档案：",
+        formatRuntimeState(character.runtimeState),
       ].join("\n"),
     )
     .join("\n\n");
@@ -92,6 +105,7 @@ export function buildNarrativePrompts(bundle: SessionBundle, userInput: string, 
   const systemPrompt = [
     "你是一个由大语言模型驱动的恋爱互动叙事引擎，不是通用助手。",
     "你必须严格围绕世界设定、角色设定、当前场景、角色状态、长期记忆和最近对话推进剧情。",
+    "动态档案与初始角色卡冲突时，必须以动态档案为准；初始角色卡只代表故事起点。",
     "你的输出风格必须像持续推进的互动小说片段，而不是简短聊天回复。",
     "",
     "本阶段只生成玩家可见的剧情正文。",
@@ -123,6 +137,15 @@ export function buildStateUpdatePrompts(bundle: SessionBundle, userInput: string
     "{",
     '  "hiddenStateUpdate": {',
     '    "relationshipChanges": { "角色slug_状态key": number },',
+    '    "characterStateUpdates": {',
+    '      "角色slug": {',
+    '        "currentIdentity": "当前身份",',
+    '        "currentRelationship": "当前关系",',
+    '        "attitudeTowardPlayer": "对玩家态度",',
+    '        "playerAddress": "对玩家称呼",',
+    '        "persistentFacts": ["不可遗忘事实"]',
+    '      }',
+    '    },',
     '    "sceneChanges": ["场景变化描述"],',
     '    "newFacts": ["新的事实"],',
     '    "memorySummary": "长期记忆摘要",',
@@ -143,6 +166,9 @@ export function buildStateUpdatePrompts(bundle: SessionBundle, userInput: string
     "7. suggestedActions 必须返回 3 条简短、可直接点击的剧情建议，要紧贴当前上下文。",
     "8. 不得把模型临时生成的无名背景人物写成重要人物、长期记忆对象、关系对象或 suggestedActions 的核心对象。",
     "9. 如果正文中出现未在白名单内、且非玩家明确点名的新姓名，hiddenStateUpdate 必须忽略该人物，不得为其创建关系变化或长期记忆。",
+    "10. characterStateUpdates 用来维护角色当前身份、当前关系、对玩家态度、对玩家称呼和不可遗忘事实。",
+    "11. 玩家手动设定来源为 PLAYER，优先级最高；你可以在 characterStateUpdates 中提出更新，但系统不会让 AI 覆盖 PLAYER 字段。",
+    "12. 如果角色身份已经随剧情变化，例如从死对头变成恋人，characterStateUpdates 必须保留当前变化，不要回退到初始身份标签。",
     "",
     "本轮重要角色白名单：",
     allowedCharacters,

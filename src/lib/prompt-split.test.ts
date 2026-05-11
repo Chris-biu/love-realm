@@ -31,6 +31,13 @@ const bundle = {
       publicSummary: "Calm and observant.",
       secretSummary: "Tests whether the player is sincere.",
       personalityTags: ["reserved"],
+      runtimeState: {
+        currentIdentity: { value: "玩家的女朋友", source: "PLAYER" },
+        currentRelationship: { value: "恋人", source: "PLAYER" },
+        attitudeTowardPlayer: { value: "亲密但嘴硬", source: "AI" },
+        playerAddress: { value: "亲爱的", source: "PLAYER" },
+        persistentFacts: { value: ["她已经接受玩家告白"], source: "PLAYER" },
+      },
     },
   ],
   relationships: [
@@ -47,8 +54,15 @@ const bundle = {
         roleLabel: "Lead",
         publicSummary: "Calm and observant.",
         secretSummary: "Tests whether the player is sincere.",
-        personalityTags: ["reserved"],
+      personalityTags: ["reserved"],
+      runtimeState: {
+        currentIdentity: { value: "玩家的女朋友", source: "PLAYER" },
+        currentRelationship: { value: "恋人", source: "PLAYER" },
+        attitudeTowardPlayer: { value: "亲密但嘴硬", source: "AI" },
+        playerAddress: { value: "亲爱的", source: "PLAYER" },
+        persistentFacts: { value: ["她已经接受玩家告白"], source: "PLAYER" },
       },
+    },
       metrics: { trust: 5 },
     },
   ],
@@ -97,4 +111,19 @@ test("state update prompt must not promote invented characters into memory", () 
   const prompts = buildStateUpdatePrompts(bundle, "Approach Lin Yue.", "Final narrative text.");
 
   assert.match(prompts.systemPrompt, /不得把模型临时生成的无名背景人物写成重要人物/);
+});
+
+test("prompt injects dynamic character state above initial role labels", () => {
+  const prompts = buildNarrativePrompts(bundle, "Approach Lin Yue.");
+
+  assert.match(prompts.userPrompt, /当前身份：玩家的女朋友/);
+  assert.match(prompts.userPrompt, /初始身份标签：Lead/);
+  assert.match(prompts.systemPrompt, /动态档案与初始角色卡冲突时，必须以动态档案为准/);
+});
+
+test("state update prompt asks model to maintain dynamic character state without overriding manual fields", () => {
+  const prompts = buildStateUpdatePrompts(bundle, "Approach Lin Yue.", "Final narrative text.");
+
+  assert.match(prompts.systemPrompt, /characterStateUpdates/);
+  assert.match(prompts.systemPrompt, /玩家手动设定来源为 PLAYER/);
 });

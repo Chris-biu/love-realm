@@ -874,6 +874,15 @@ select {
   background: rgba(255, 255, 255, 0.52);
 }
 
+.runtime-state-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(138, 85, 55, 0.14);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 250, 246, 0.62);
+}
+
 .console-backdrop {
   position: fixed;
   inset: 0;

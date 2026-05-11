@@ -10,6 +10,16 @@ export const hiddenStateUpdateSchema = z.object({
   currentTime: z.string().optional(),
   atmosphere: z.string().optional(),
   suggestedActions: z.array(z.string()).max(3).default([]),
+  characterStateUpdates: z.record(
+    z.string(),
+    z.object({
+      currentIdentity: z.string().optional(),
+      currentRelationship: z.string().optional(),
+      attitudeTowardPlayer: z.string().optional(),
+      playerAddress: z.string().optional(),
+      persistentFacts: z.array(z.string()).optional(),
+    }),
+  ).default({}),
 });
 
 export const narrativeTurnSchema = z.object({

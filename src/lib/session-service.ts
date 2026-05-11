@@ -9,6 +9,13 @@ import {
 } from "@/lib/config";
 import { getAdapter } from "@/lib/ai";
 import { buildNarrativePrompts, buildStateUpdatePrompts } from "@/lib/prompt";
+import {
+  mergeCharacterRuntimeState,
+  normalizeCharacterRuntimeState,
+  serializeCharacterRuntimeState,
+  type CharacterRuntimeState,
+  type CharacterRuntimeStateUpdate,
+} from "@/lib/character-runtime-state";
 import { prisma } from "@/lib/prisma";
 import {
   applyMetricDeltas,
@@ -30,6 +37,7 @@ type CharacterView = {
   secretSummary: string;
   personalityTags: string[];
   initialMetrics: Record<string, number>;
+  runtimeState: CharacterRuntimeState;
 };
 
 type MessageView = {
@@ -44,6 +52,7 @@ type RelationshipView = {
   id: string;
   characterId: string;
   metrics: Record<string, number>;
+  dynamicProfile: CharacterRuntimeState;
   note: string | null;
   character: {
     id: string;
@@ -220,6 +229,7 @@ function buildSuggestedPrompts(params: {
 
 function mapSession(session: Prisma.SessionGetPayload<{ include: typeof sessionInclude }>): SessionBundle {
   const statusMetrics = normalizeStatusMetrics(session.world.statusMetrics);
+  const relationshipsByCharacterId = new Map(session.relationships.map((item) => [item.characterId, item]));
   const latestSceneRecord = session.sceneStates[0];
   const sceneState: SceneStateView = {
     currentScene: latestSceneRecord?.currentScene || session.world.defaultScene,
@@ -239,6 +249,7 @@ function mapSession(session: Prisma.SessionGetPayload<{ include: typeof sessionI
     secretSummary: character.secretSummary,
     personalityTags: asStringArray(character.personalityTags),
     initialMetrics: asNumberRecord(character.initialMetrics),
+    runtimeState: normalizeCharacterRuntimeState(relationshipsByCharacterId.get(character.id)?.dynamicProfile),
   }));
   const latestAssistantMessage = [...session.messages].reverse().find((message) => message.role === MessageRole.ASSISTANT);
 
@@ -269,6 +280,7 @@ function mapSession(session: Prisma.SessionGetPayload<{ include: typeof sessionI
       id: item.id,
       characterId: item.characterId,
       metrics: syncMetricRecord(statusMetrics, asNumberRecord(item.metrics)),
+      dynamicProfile: normalizeCharacterRuntimeState(item.dynamicProfile),
       note: item.note,
       character: {
         id: item.character.id,
@@ -323,6 +335,7 @@ async function createSession(worldId: string, model = DEFAULT_DEEPSEEK_MODEL, is
         create: world.characters.map((character) => ({
           character: { connect: { id: character.id } },
           metrics: syncMetricRecord(statusMetrics, asNumberRecord(character.initialMetrics)) as Prisma.InputJsonValue,
+          dynamicProfile: serializeCharacterRuntimeState(normalizeCharacterRuntimeState(null)),
         })),
       },
       memorySummaries: { create: { turnNumber: 0, content: world.initialMemory } },
@@ -539,6 +552,22 @@ export async function updateCharacterSettings(characterId: string, input: { name
   };
 }
 
+export async function updateCharacterRuntimeState(input: { sessionId: string; characterId: string; runtimeState: CharacterRuntimeStateUpdate }) {
+  const relationship = await prisma.relationshipState.findUnique({
+    where: { sessionId_characterId: { sessionId: input.sessionId, characterId: input.characterId } },
+  });
+  if (!relationship) throw new Error("Character state does not exist in this session.");
+
+  const current = normalizeCharacterRuntimeState(relationship.dynamicProfile);
+  const merged = mergeCharacterRuntimeState(current, input.runtimeState, "PLAYER");
+  await prisma.relationshipState.update({
+    where: { id: relationship.id },
+    data: { dynamicProfile: serializeCharacterRuntimeState(merged) },
+  });
+
+  return getSessionDetail(input.sessionId);
+}
+
 export async function createCharacterForWorld(input: { worldId: string; sessionId: string; name?: string; gender?: string; roleLabel?: string; publicSummary?: string; secretSummary?: string; personalityTags?: string[] }) {
   const world = await prisma.world.findUnique({ where: { id: input.worldId } });
   if (!world) throw new Error("World does not exist.");
@@ -561,7 +590,14 @@ export async function createCharacterForWorld(input: { worldId: string; sessionI
   const sessions = await prisma.session.findMany({ where: { worldId: world.id }, select: { id: true } });
   await prisma.$transaction(
     sessions.map((session) =>
-      prisma.relationshipState.create({ data: { sessionId: session.id, characterId: character.id, metrics: initialMetrics as Prisma.InputJsonValue } }),
+      prisma.relationshipState.create({
+        data: {
+          sessionId: session.id,
+          characterId: character.id,
+          metrics: initialMetrics as Prisma.InputJsonValue,
+          dynamicProfile: serializeCharacterRuntimeState(normalizeCharacterRuntimeState(null)),
+        },
+      }),
     ),
   );
   return getSessionDetail(input.sessionId);
@@ -605,6 +641,17 @@ function computeRelationshipUpdates(relationships: RelationshipView[], character
   }));
 }
 
+function computeCharacterRuntimeUpdates(relationships: RelationshipView[], characters: CharacterView[], changes: HiddenStateUpdate["characterStateUpdates"]) {
+  return relationships.map((relationship) => {
+    const character = characters.find((item) => item.id === relationship.characterId);
+    const update = character ? changes[character.slug] : undefined;
+    return {
+      relationshipId: relationship.id,
+      dynamicProfile: update ? mergeCharacterRuntimeState(relationship.dynamicProfile, update, "AI") : relationship.dynamicProfile,
+    };
+  });
+}
+
 function buildSceneSnapshot(bundle: SessionBundle, turnNumber: number, update: HiddenStateUpdate) {
   return {
     turnNumber,
@@ -645,6 +692,7 @@ export async function sendTurn(params: { sessionId: string; content: string; mod
   const generated = { visibleReply, hiddenStateUpdate };
   const turnNumber = bundle.messages.at(-1)?.turnNumber ? bundle.messages.at(-1)!.turnNumber + 1 : 1;
   const relationshipUpdates = computeRelationshipUpdates(bundle.relationships, bundle.characters, bundle.statusMetrics, generated.hiddenStateUpdate.relationshipChanges);
+  const characterRuntimeUpdates = computeCharacterRuntimeUpdates(bundle.relationships, bundle.characters, generated.hiddenStateUpdate.characterStateUpdates);
   const sceneSnapshot = buildSceneSnapshot(bundle, turnNumber, generated.hiddenStateUpdate);
 
   const writes: Prisma.PrismaPromise<unknown>[] = [
@@ -656,6 +704,9 @@ export async function sendTurn(params: { sessionId: string; content: string; mod
     }),
     ...relationshipUpdates.map((relationship) =>
       prisma.relationshipState.update({ where: { id: relationship.relationshipId }, data: { metrics: relationship.metrics as Prisma.InputJsonValue } }),
+    ),
+    ...characterRuntimeUpdates.map((relationship) =>
+      prisma.relationshipState.update({ where: { id: relationship.relationshipId }, data: { dynamicProfile: serializeCharacterRuntimeState(relationship.dynamicProfile) } }),
     ),
     prisma.sceneState.create({
       data: {

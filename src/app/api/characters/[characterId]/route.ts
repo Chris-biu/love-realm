@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { deleteCharacterById, updateCharacterSettings } from "@/lib/session-service";
+import { deleteCharacterById, updateCharacterRuntimeState, updateCharacterSettings } from "@/lib/session-service";
 
 type RouteContext = {
   params: Promise<{
@@ -17,10 +17,21 @@ export async function PATCH(request: Request, context: RouteContext) {
       publicSummary?: string;
       secretSummary?: string;
       personalityTags?: string[];
+      sessionId?: string;
+      runtimeState?: {
+        currentIdentity?: string;
+        currentRelationship?: string;
+        attitudeTowardPlayer?: string;
+        playerAddress?: string;
+        persistentFacts?: string[];
+      };
     };
 
     const character = await updateCharacterSettings(characterId, body);
-    return NextResponse.json({ character });
+    const session = body.sessionId && body.runtimeState
+      ? await updateCharacterRuntimeState({ sessionId: body.sessionId, characterId, runtimeState: body.runtimeState })
+      : null;
+    return NextResponse.json({ character, session });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "保存角色设定失败。" },

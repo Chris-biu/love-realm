@@ -83,6 +83,7 @@ model RelationshipState {
   sessionId   String
   characterId String
   metrics     Json
+  dynamicProfile Json?
   note        String?
   updatedAt   DateTime  @updatedAt
   createdAt   DateTime  @default(now())

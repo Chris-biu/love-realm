@@ -32,6 +32,11 @@ type CharacterDraft = {
   publicSummary: string;
   secretSummary: string;
   personalityTagsText: string;
+  currentIdentity: string;
+  currentRelationship: string;
+  attitudeTowardPlayer: string;
+  playerAddress: string;
+  persistentFactsText: string;
 };
 
 const API_KEY_STORAGE_KEY = "moonlit_residence_deepseek_api_key";
@@ -75,6 +80,11 @@ function createCharacterDrafts(session: SessionBundle): CharacterDraft[] {
     publicSummary: character.publicSummary,
     secretSummary: character.secretSummary,
     personalityTagsText: character.personalityTags.join("、"),
+    currentIdentity: character.runtimeState.currentIdentity.value,
+    currentRelationship: character.runtimeState.currentRelationship.value,
+    attitudeTowardPlayer: character.runtimeState.attitudeTowardPlayer.value,
+    playerAddress: character.runtimeState.playerAddress.value,
+    persistentFactsText: character.runtimeState.persistentFacts.value.join("\n"),
   }));
 }
 
@@ -284,33 +294,52 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     setCharacterDrafts((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
 
+  function parseRuntimeFacts(text: string) {
+    return text
+      .split(/\n+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
   async function saveCharacterSettings(characterId: string) {
     const draft = characterDrafts.find((item) => item.id === characterId);
     if (!draft) return;
     setError(null);
     setIsWorking(true);
     try {
-      const payload = await readJson<{ character: SessionBundle["characters"][number] }>(
+      const payload = await readJson<{ character: SessionBundle["characters"][number]; session?: SessionBundle }>(
         await fetch(`/api/characters/${characterId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            sessionId: activeSession.id,
             name: draft.name,
             gender: draft.gender,
             roleLabel: draft.roleLabel,
             publicSummary: draft.publicSummary,
             secretSummary: draft.secretSummary,
             personalityTags: draft.personalityTagsText.split(/[、，,]/).map((item) => item.trim()).filter(Boolean),
+            runtimeState: {
+              currentIdentity: draft.currentIdentity,
+              currentRelationship: draft.currentRelationship,
+              attitudeTowardPlayer: draft.attitudeTowardPlayer,
+              playerAddress: draft.playerAddress,
+              persistentFacts: parseRuntimeFacts(draft.persistentFactsText),
+            },
           }),
         }),
       );
-      setActiveSession((current) => ({
-        ...current,
-        characters: current.characters.map((item) => (item.id === characterId ? { ...item, ...payload.character } : item)),
-        relationships: current.relationships.map((item) =>
-          item.character.id === characterId ? { ...item, character: { ...item.character, name: payload.character.name, gender: payload.character.gender } } : item,
-        ),
-      }));
+      if (payload.session) {
+        setActiveSession(payload.session);
+      } else {
+        setActiveSession((current) => ({
+          ...current,
+          characters: current.characters.map((item) => (item.id === characterId ? { ...item, ...payload.character } : item)),
+          relationships: current.relationships.map((item) =>
+            item.character.id === characterId ? { ...item, character: { ...item.character, name: payload.character.name, gender: payload.character.gender } } : item,
+          ),
+        }));
+      }
       updateFeedback("角色设定已保存。", "success");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "保存角色失败。");
@@ -602,8 +631,49 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
           </section>
 
           <section className="settings-section">
-            <div className="subsection-header"><div><h3>角色设定</h3><p className="muted compact-text">角色可新增、编辑或删除。</p></div><button className="secondary-button" type="button" onClick={createCharacter} disabled={isWorking}>新增角色</button></div>
-            <div className="character-editor-list">{characterDrafts.map((draft) => <div key={draft.id} className="character-editor-card"><div className="subsection-header"><h3>{draft.name || "未命名角色"}</h3><div className="inline-actions compact-actions"><button className="secondary-button" type="button" onClick={() => saveCharacterSettings(draft.id)} disabled={isWorking}>保存</button><button className="ghost-button danger-button" type="button" onClick={() => deleteCharacter(draft.id)} disabled={isWorking || activeSession.characters.length <= 1}>删除</button></div></div><div className="form-stack"><label className="field-block"><span className="field-label">角色名称</span><input className="api-key-input" value={draft.name} onChange={(event) => updateCharacterDraft(draft.id, { name: event.target.value })} /></label><label className="field-block"><span className="field-label">性别</span><input className="api-key-input" value={draft.gender} onChange={(event) => updateCharacterDraft(draft.id, { gender: event.target.value })} /></label><label className="field-block"><span className="field-label">身份标签</span><input className="api-key-input" value={draft.roleLabel} onChange={(event) => updateCharacterDraft(draft.id, { roleLabel: event.target.value })} /></label><label className="field-block"><span className="field-label">公开设定</span><textarea value={draft.publicSummary} onChange={(event) => updateCharacterDraft(draft.id, { publicSummary: event.target.value })} rows={2} /></label><label className="field-block"><span className="field-label">隐藏动机</span><textarea value={draft.secretSummary} onChange={(event) => updateCharacterDraft(draft.id, { secretSummary: event.target.value })} rows={2} /></label><label className="field-block"><span className="field-label">性格标签</span><input className="api-key-input" value={draft.personalityTagsText} onChange={(event) => updateCharacterDraft(draft.id, { personalityTagsText: event.target.value })} /></label></div></div>)}</div>
+            <div className="subsection-header">
+              <div>
+                <h3>角色设定</h3>
+                <p className="muted compact-text">角色可新增、编辑或删除。</p>
+              </div>
+              <button className="secondary-button" type="button" onClick={createCharacter} disabled={isWorking}>
+                新增角色
+              </button>
+            </div>
+            <div className="character-editor-list">
+              {characterDrafts.map((draft) => (
+                <div key={draft.id} className="character-editor-card">
+                  <div className="subsection-header">
+                    <h3>{draft.name || "未命名角色"}</h3>
+                    <div className="inline-actions compact-actions">
+                      <button className="secondary-button" type="button" onClick={() => saveCharacterSettings(draft.id)} disabled={isWorking}>
+                        保存
+                      </button>
+                      <button className="ghost-button danger-button" type="button" onClick={() => deleteCharacter(draft.id)} disabled={isWorking || activeSession.characters.length <= 1}>
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                  <div className="form-stack">
+                    <label className="field-block"><span className="field-label">角色名称</span><input className="api-key-input" value={draft.name} onChange={(event) => updateCharacterDraft(draft.id, { name: event.target.value })} /></label>
+                    <label className="field-block"><span className="field-label">性别</span><input className="api-key-input" value={draft.gender} onChange={(event) => updateCharacterDraft(draft.id, { gender: event.target.value })} /></label>
+                    <label className="field-block"><span className="field-label">身份标签</span><input className="api-key-input" value={draft.roleLabel} onChange={(event) => updateCharacterDraft(draft.id, { roleLabel: event.target.value })} /></label>
+                    <label className="field-block"><span className="field-label">公开设定</span><textarea value={draft.publicSummary} onChange={(event) => updateCharacterDraft(draft.id, { publicSummary: event.target.value })} rows={2} /></label>
+                    <label className="field-block"><span className="field-label">隐藏动机</span><textarea value={draft.secretSummary} onChange={(event) => updateCharacterDraft(draft.id, { secretSummary: event.target.value })} rows={2} /></label>
+                    <label className="field-block"><span className="field-label">性格标签</span><input className="api-key-input" value={draft.personalityTagsText} onChange={(event) => updateCharacterDraft(draft.id, { personalityTagsText: event.target.value })} /></label>
+                    <div className="runtime-state-panel">
+                      <p className="field-label">当前动态档案</p>
+                      <label className="field-block"><span className="field-label">当前身份</span><input className="api-key-input" value={draft.currentIdentity} onChange={(event) => updateCharacterDraft(draft.id, { currentIdentity: event.target.value })} /></label>
+                      <label className="field-block"><span className="field-label">当前关系</span><input className="api-key-input" value={draft.currentRelationship} onChange={(event) => updateCharacterDraft(draft.id, { currentRelationship: event.target.value })} /></label>
+                      <label className="field-block"><span className="field-label">对玩家态度</span><input className="api-key-input" value={draft.attitudeTowardPlayer} onChange={(event) => updateCharacterDraft(draft.id, { attitudeTowardPlayer: event.target.value })} /></label>
+                      <label className="field-block"><span className="field-label">对玩家称呼</span><input className="api-key-input" value={draft.playerAddress} onChange={(event) => updateCharacterDraft(draft.id, { playerAddress: event.target.value })} /></label>
+                      <label className="field-block"><span className="field-label">不可遗忘事实</span><textarea value={draft.persistentFactsText} onChange={(event) => updateCharacterDraft(draft.id, { persistentFactsText: event.target.value })} rows={3} placeholder="每行一条事实" /></label>
+                      <p className="muted compact-text">AI 会自动维护，但玩家手动修改的字段优先级最高。</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="settings-section">

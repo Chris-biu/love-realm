@@ -21,3 +21,27 @@ test("parses hidden state update without requiring the long visible reply", () =
   assert.equal(parsed.suggestedActions.length, 3);
   assert.equal(parsed.relationshipChanges.lin_yue_trust, 1);
 });
+
+test("parses character runtime state updates from hidden state JSON", () => {
+  const parsed = parseHiddenStateUpdate(
+    JSON.stringify({
+      relationshipChanges: {},
+      sceneChanges: [],
+      newFacts: [],
+      memorySummary: "",
+      suggestedActions: ["Continue", "Ask", "Observe"],
+      characterStateUpdates: {
+        lin_yue: {
+          currentIdentity: "玩家的女朋友",
+          currentRelationship: "恋人",
+          attitudeTowardPlayer: "亲密但嘴硬",
+          playerAddress: "亲爱的",
+          persistentFacts: ["她已经接受玩家告白"],
+        },
+      },
+    }),
+  );
+
+  assert.equal(parsed.characterStateUpdates.lin_yue.currentIdentity, "玩家的女朋友");
+  assert.deepEqual(parsed.characterStateUpdates.lin_yue.persistentFacts, ["她已经接受玩家告白"]);
+});
