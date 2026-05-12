@@ -22,49 +22,6 @@ Love Realm 是一个基于 `Next.js + TypeScript + SQLite + Prisma + Electron` �
 - 支持导出为小说 Markdown，包括快速草稿和 AI 润色版本。
 - Windows 桌面版支持双击 `Love Realm.exe` 直接启动。
 
-## 本地运行
-
-1. 安装依赖
-
-```bash
-npm install
-```
-
-2. 配置本机环境
-
-```bash
-npm run setup:local
-```
-
-该脚本会生成本机 `.env`，并把 SQLite 数据库放到系统用户数据目录，避免游玩记录落在项目仓库中。
-
-如果手动配置 `.env`，至少需要：
-
-```env
-DATABASE_URL="file:C:/Users/your-name/AppData/Local/love-realm/love-realm.db"
-DEEPSEEK_BASE_URL="https://api.deepseek.com"
-DEFAULT_DEEPSEEK_MODEL="deepseek-v4-flash"
-```
-
-可以不在 `.env` 写 `DEEPSEEK_API_KEY`。启动后在页面“幕后”入口填写 API Key 即可，该 Key 只保存在当前设备。
-
-3. 初始化数据库
-
-```bash
-npm run db:push
-npm run db:seed
-```
-
-注意：`npm run db:seed` 会重置初始世界、角色和会话数据。已有游玩记录时，数据库结构变更后通常只需要运行 `npm run db:push`，不要重复 seed。
-
-4. 启动开发环境
-
-```bash
-npm run dev
-```
-
-打开 [http://localhost:3000](http://localhost:3000)。
-
 ## Windows 桌面版
 
 生成 Windows 桌面版：
