@@ -4,132 +4,170 @@
   <img src="./desktop/icon.png" alt="Love Realm app icon" width="180" />
 </p>
 
-Love Realm 是一个基于 `Next.js + TypeScript + SQLite + Prisma + Electron` 的多角色恋爱养成互动叙事 MVP。玩家通过自然语言推进剧情，系统会保存会话、场景、角色关系、长期记忆和状态变化，并支持把多轮互动导出为可阅读的小说章节。
+Love Realm is an interactive romance narrative app built with `Next.js + TypeScript + SQLite + Prisma + Electron`.
+It is no longer just a simple chat MVP. The current version adds a stage-style reading UI, per-save protagonist customization, configurable pacing and relationship caps, lightweight RAG-based memory retrieval, and a repaired persistent-facts system that can keep evolving after manual edits.
 
-当前版本接入 DeepSeek，玩家需要在本机输入自己的 DeepSeek API Key；项目不会内置开发者 API Key。
+The app currently uses DeepSeek for generation. Players must provide their own DeepSeek API key locally. The project does not ship a built-in developer key.
 
-## 已实现能力
+## What Changed In This Update
 
-- 沉浸式剧情流页面，主舞台采用连续阅读式对话体验。
-- 长篇剧情生成，默认每轮可见剧情不少于 `800` 个中文字符。
-- 玩家可设置本轮最低回复字数，范围为 `300-20000`。
-- 新版生成链路已拆分为“纯正文生成”和“状态 JSON 更新”，减少长文本破坏 JSON 的概率。
-- 轻量反幻觉约束：正文生成和续写阶段都会带入角色白名单，默认禁止 AI 凭空创造重要角色。
-- 动态角色档案：每个存档独立记录角色当前身份、当前关系、对玩家态度、称呼和不可遗忘事实。
-- 正文未达到最低字数时，后端会自动续写并合并，直到达到目标或超过安全上限。
-- 世界书架、世界详情、角色预览、章节存档、读档和删档。
-- 世界设定、角色设定、状态栏、模型和 API Key 可在“幕后”工作台调整。
-- 支持导出为小说 Markdown，包括快速草稿和 AI 润色版本。
-- Windows 桌面版支持双击 `Love Realm.exe` 直接启动。
+- Richer frontend presentation with a more cinematic story stage, layered world shelf, and backstage control console.
+- New protagonist profile system on the session layer:
+  - display name
+  - role / identity
+  - outward persona
+  - background
+  - current motivation
+  - speaking style
+- Status metrics now support per-metric `max` values instead of a hardcoded 10-point scale.
+- Added world-level director controls:
+  - `pacing`: `slow | balanced | fast`
+  - `beatLabel`: target experience label
+  - retrieval window sizes for memory / facts / dialogue
+- Added lightweight RAG-style retrieval into prompt construction.
+- Fixed the persistent-facts bug:
+  - player-edited facts stay protected
+  - AI can still append new facts later
+  - the whole field no longer freezes after a manual edit
 
-## Windows 桌面版
+## Core Features
 
-生成 Windows 桌面版：
+- Interactive long-form narrative generation with a configurable minimum reply length.
+- Session-based branching and save slots.
+- Static character cards plus dynamic per-session runtime character state.
+- Relationship meters with configurable caps and stage labels.
+- World-level narrative rules and pacing controls.
+- Lightweight anti-hallucination character whitelist rules in prompts.
+- Novel export:
+  - quick draft markdown
+  - AI-polished markdown
+- Windows desktop packaging via Electron.
+
+## Product Model
+
+The project now has a clearer responsibility split:
+
+- `World`
+  - world premise
+  - static character templates
+  - metric templates
+  - director pacing config
+- `Session`
+  - player / protagonist profile
+  - messages
+  - memory summaries
+  - dynamic character runtime state
+- `Character`
+  - static role card
+  - public summary
+  - secret summary
+  - initial metric template
+
+## RAG Strategy
+
+This version uses lightweight retrieval instead of a full vector database.
+
+For each turn, the prompt can pull relevant context from:
+
+- long-term memory summaries
+- scene facts and character persistent facts
+- recent dialogue
+
+The retrieval window size is configurable from the world director settings.
+
+## Persistent Facts Fix
+
+Previous behavior:
+
+- once a player manually edited the "persistent facts" field, later AI updates could stop affecting it entirely
+
+Current behavior:
+
+- player-confirmed facts remain protected
+- AI can still add newly discovered facts
+- manual edits no longer freeze the entire field
+
+This logic is covered by unit tests.
+
+## Local Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Prepare the database schema:
+
+```bash
+npm run db:push
+```
+
+Optional seed data:
+
+```bash
+npm run db:seed
+```
+
+Run development server:
+
+```bash
+npm run dev
+```
+
+## Validation
+
+Unit tests:
+
+```bash
+npm run test:unit
+```
+
+Production build:
+
+```bash
+npm run build
+```
+
+## Windows Desktop Build
+
+Build the desktop app:
 
 ```bash
 npm run desktop:dist
 ```
 
-产物目录：
+Output:
 
 ```text
 dist-desktop/Love Realm-win32-x64/
 ```
 
-玩家双击 `Love Realm.exe` 即可启动。桌面版会自动启动内置 Next.js 服务，并在玩家自己的系统数据目录创建 SQLite 数据库，例如：
+The generated desktop app starts the bundled Next.js app locally and uses a SQLite database stored in the player's own app data directory.
+
+## Important Paths
 
 ```text
-C:\Users\<you>\AppData\Roaming\Love Realm\love-realm.db
-```
-
-桌面版不会内置开发者的 DeepSeek API Key。玩家需要在游戏内输入自己的 DeepSeek API Key，该 Key 会保存在玩家本机的 Electron Local Storage 中。
-
-应用图标资源：
-
-```text
-desktop/icon.ico
-desktop/icon.png
-```
-
-## 长篇生成机制
-
-过去版本要求 DeepSeek 一次性返回包含长篇 `visibleReply` 的 JSON。这个方案在长文本场景下容易因为转义、截断或字段遗漏导致“返回的 JSON 不符合预期”。
-
-当前版本改为两阶段：
-
-- 第一阶段：只生成玩家可见的剧情正文，不要求 JSON。
-- 第二阶段：正文长度达标后，再根据最终正文生成很小的 `hiddenStateUpdate` JSON。
-
-状态 JSON 结构为：
-
-```json
-{
-  "hiddenStateUpdate": {
-    "relationshipChanges": {
-      "lin_yue_trust": 2
-    },
-    "characterStateUpdates": {
-      "lin_yue": {
-        "currentIdentity": "玩家的女朋友",
-        "currentRelationship": "恋人",
-        "attitudeTowardPlayer": "亲密但仍会嘴硬",
-        "playerAddress": "亲爱的",
-        "persistentFacts": ["她已经接受玩家告白"]
-      }
-    },
-    "sceneChanges": ["氛围发生了真实变化"],
-    "newFacts": ["本轮新增的重要事实"],
-    "memorySummary": "值得长期记住的本轮摘要",
-    "currentScene": "新的当前场景",
-    "currentTime": "新的当前时间",
-    "atmosphere": "新的当前氛围",
-    "suggestedActions": ["建议一", "建议二", "建议三"]
-  }
-}
-```
-
-`relationshipChanges` 只能使用当前世界状态栏模板中存在的字段，最终状态值会限制在 `0-10`。
-
-## 动态角色档案
-
-角色卡分为两层：
-
-- 初始角色卡：角色名称、性别、初始身份标签、公开设定、隐藏动机和性格标签。
-- 当前动态档案：当前身份、当前关系、对玩家态度、对玩家称呼和不可遗忘事实。
-
-动态档案保存在会话内，不同存档互不影响。例如同一个角色在 A 存档里可以是恋人，在 B 存档里仍然是死对头。
-
-AI 每轮会在现有状态 JSON 中尝试更新 `characterStateUpdates`，不会额外增加一次 AI 调用。玩家也可以在“幕后工作台 > 角色设定 > 当前动态档案”中手动编辑。玩家手动编辑的字段会作为 `PLAYER` 来源保存，后续 AI 不能自动覆盖；当动态档案和初始角色卡冲突时，剧情生成会优先使用动态档案。
-
-## 小说导出
-
-当前会话可以在“幕后”中导出为 Markdown 小说文件：
-
-- 快速草稿导出：不调用 AI，将玩家行动和 AI 剧情回复整理成小说式 Markdown。
-- AI 润色导出：调用玩家自己的 DeepSeek API Key，把多轮互动润色为更接近正常小说阅读体验的章节文本。
-- 导出范围支持全部会话或最近 N 轮。
-- 导出内容只使用玩家可见剧情、玩家行动、场景和必要记忆摘要，不导出隐藏状态数据。
-
-## 主要目录
-
-```text
-desktop/                  Electron 桌面壳与应用图标
+desktop/                  Electron shell and app icons
 prisma/
-  schema.prisma           数据模型
-  seed.ts                 初始世界和角色数据
+  schema.prisma           Database schema
+  seed.ts                 Seed world and character data
 src/
-  app/api/                后端 API Routes
-  components/             前端互动叙事界面
-  lib/ai/                 DeepSeek 适配层
-  lib/prompt.ts           Prompt 编排
-  lib/session-service.ts  世界状态和持久化服务
-  lib/status-metrics.ts   自定义角色状态栏逻辑
-  lib/story-schema.ts     状态 JSON 校验
+  app/api/                API routes
+  components/             Frontend UI
+  lib/ai/                 DeepSeek adapter
+  lib/prompt.ts           Prompt building with retrieval injection
+  lib/session-service.ts  Session, world, and state orchestration
+  lib/status-metrics.ts   Configurable metric definitions and caps
+  lib/story-director.ts   Director pacing and protagonist profile models
+  lib/story-retrieval.ts  Lightweight retrieval helpers
 ```
 
-## 验证命令
+## Notes
+
+- `next-env.d.ts` may be regenerated by Next.js depending on local dev/build mode.
+- Prisma client should be regenerated after schema changes:
 
 ```bash
-npm run test:unit
-npm run build
+npx prisma generate
 ```

@@ -2,38 +2,65 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mergeCharacterRuntimeState, normalizeCharacterRuntimeState } from "./character-runtime-state";
 
-test("AI updates do not override player locked character runtime fields", () => {
+test("AI updates do not override player locked text fields", () => {
   const current = normalizeCharacterRuntimeState({
-    currentIdentity: { value: "玩家的女朋友", source: "PLAYER" },
-    currentRelationship: { value: "恋人", source: "PLAYER" },
-    attitudeTowardPlayer: { value: "亲密但嘴硬", source: "AI" },
-    playerAddress: { value: "你", source: "AI" },
-    persistentFacts: { value: ["她已经接受玩家告白"], source: "PLAYER" },
+    currentIdentity: { value: "Player's lover", source: "PLAYER" },
+    currentRelationship: { value: "Lovers", source: "PLAYER" },
+    attitudeTowardPlayer: { value: "Warm but guarded", source: "AI" },
+    playerAddress: { value: "you", source: "AI" },
+    persistentFacts: {
+      value: ["She accepted the player's confession."],
+      source: "PLAYER",
+    },
   });
 
   const merged = mergeCharacterRuntimeState(current, {
-    currentIdentity: "死对头",
-    currentRelationship: "敌对",
-    attitudeTowardPlayer: "重新敌视玩家",
-    playerAddress: "宿敌",
-    persistentFacts: ["她仍然只把玩家当敌人"],
+    currentIdentity: "Rival",
+    currentRelationship: "Enemies",
+    attitudeTowardPlayer: "Hostile again",
+    playerAddress: "intruder",
+    persistentFacts: ["She only sees the player as an enemy."],
   });
 
-  assert.equal(merged.currentIdentity.value, "玩家的女朋友");
-  assert.equal(merged.currentRelationship.value, "恋人");
-  assert.equal(merged.attitudeTowardPlayer.value, "重新敌视玩家");
-  assert.equal(merged.playerAddress.value, "宿敌");
-  assert.deepEqual(merged.persistentFacts.value, ["她已经接受玩家告白"]);
+  assert.equal(merged.currentIdentity.value, "Player's lover");
+  assert.equal(merged.currentRelationship.value, "Lovers");
+  assert.equal(merged.attitudeTowardPlayer.value, "Hostile again");
+  assert.equal(merged.playerAddress.value, "intruder");
+});
+
+test("player-edited persistent facts remain protected but AI can still append new facts", () => {
+  const current = normalizeCharacterRuntimeState({
+    persistentFacts: {
+      value: ["The player now knows her real surname."],
+      source: "PLAYER",
+    },
+  });
+
+  const merged = mergeCharacterRuntimeState(current, {
+    persistentFacts: [
+      "She keeps the old brass key in her coat pocket.",
+      "The player now knows her real surname.",
+    ],
+  });
+
+  assert.deepEqual(merged.persistentFacts.value, [
+    "The player now knows her real surname.",
+    "She keeps the old brass key in her coat pocket.",
+  ]);
 });
 
 test("manual character runtime state is marked as player sourced", () => {
-  const merged = mergeCharacterRuntimeState(normalizeCharacterRuntimeState(null), {
-    currentIdentity: "玩家的女朋友",
-    currentRelationship: "恋人",
-    attitudeTowardPlayer: "亲密但保留竞争感",
-    playerAddress: "亲爱的",
-    persistentFacts: ["她已经从死对头转变为恋人"],
-  }, "PLAYER");
+  const merged = mergeCharacterRuntimeState(
+    normalizeCharacterRuntimeState(null),
+    {
+      currentIdentity: "Player's lover",
+      currentRelationship: "Lovers",
+      attitudeTowardPlayer: "Affectionate but competitive",
+      playerAddress: "dear",
+      persistentFacts: ["She turned from rival to lover."],
+    },
+    "PLAYER",
+  );
 
   assert.equal(merged.currentIdentity.source, "PLAYER");
   assert.equal(merged.currentRelationship.source, "PLAYER");

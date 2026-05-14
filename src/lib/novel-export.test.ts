@@ -18,6 +18,23 @@ function makeBundle(): SessionBundle {
       description: "旧公馆里的恋爱悬疑。",
       premise: "玩家回到公馆，重新面对旧关系。",
       storyGuide: "写成互动小说。",
+      directorConfig: {
+        pacing: "balanced",
+        beatLabel: "稳步升温",
+        retrieval: {
+          memoryLimit: 4,
+          factLimit: 4,
+          dialogueLimit: 4,
+        },
+      },
+    },
+    playerProfile: {
+      displayName: "你",
+      role: "代管人",
+      publicPersona: "克制",
+      background: "离开多年后重返旧地。",
+      motivation: "查清真相",
+      speakingStyle: "礼貌但锋利",
     },
     characters: [],
     messages: [
@@ -29,7 +46,7 @@ function makeBundle(): SessionBundle {
     relationships: [],
     sceneState: {
       currentScene: "公馆餐厅",
-      currentTime: "第1天，夜晚",
+      currentTime: "第 1 天，夜晚",
       atmosphere: "试探",
       summary: "餐厅里的重逢。",
       changes: [],
@@ -45,7 +62,7 @@ test("快速导出生成小说式 Markdown 而不是聊天日志", () => {
   const markdown = buildQuickNovelMarkdown(makeBundle());
 
   assert.match(markdown, /^# 雨夜重逢/);
-  assert.match(markdown, /## 第 1 节/);
+  assert.match(markdown, /## 第 1 章/);
   assert.match(markdown, /这一刻，你选择推开餐厅的门。/);
   assert.doesNotMatch(markdown, /玩家：|AI：|系统：/);
 });

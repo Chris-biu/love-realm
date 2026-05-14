@@ -1,6 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { updateWorldSettings } from "@/lib/session-service";
 import type { StatusMetricDefinition } from "@/lib/status-metrics";
+import type { DirectorConfig } from "@/lib/story-director";
 
 type RouteContext = {
   params: Promise<{
@@ -17,6 +18,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       premise?: string;
       storyGuide?: string;
       statusMetrics?: StatusMetricDefinition[];
+      directorConfig?: DirectorConfig;
     };
 
     const world = await updateWorldSettings(worldId, {
@@ -25,6 +27,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       premise: body.premise,
       storyGuide: body.storyGuide,
       statusMetrics: body.statusMetrics,
+      directorConfig: body.directorConfig,
     });
 
     return NextResponse.json({ world });

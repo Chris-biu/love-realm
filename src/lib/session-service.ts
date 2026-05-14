@@ -25,6 +25,14 @@ import {
   type StatusMetricDefinition,
 } from "@/lib/status-metrics";
 import { hiddenStateUpdateSchema, type HiddenStateUpdate } from "@/lib/story-schema";
+import {
+  DEFAULT_DIRECTOR_CONFIG,
+  DEFAULT_PLAYER_PROFILE,
+  normalizeDirectorConfig,
+  normalizePlayerProfile,
+  type DirectorConfig,
+  type PlayerProfile,
+} from "@/lib/story-director";
 import { pickSuggestedPrompts } from "@/lib/suggested-prompts";
 
 type CharacterView = {
@@ -78,20 +86,24 @@ type MemorySummaryView = {
   createdAt: string;
 };
 
+export type SessionWorld = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  premise: string;
+  storyGuide: string;
+  directorConfig: DirectorConfig;
+};
+
 export type SessionBundle = {
   id: string;
   title: string;
   provider: string;
   model: string;
   isSaved: boolean;
-  world: {
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
-    premise: string;
-    storyGuide: string;
-  };
+  world: SessionWorld;
+  playerProfile: PlayerProfile;
   characters: CharacterView[];
   messages: MessageView[];
   relationships: RelationshipView[];
@@ -134,6 +146,8 @@ export type WorldCardItem = {
   description: string;
   premise: string;
   defaultScene: string;
+  directorConfig: DirectorConfig;
+  playerProfileTemplate: PlayerProfile;
   characterCount: number;
   characters: WorldCharacterItem[];
   savedSessions: WorldSaveItem[];
@@ -267,7 +281,9 @@ function mapSession(session: Prisma.SessionGetPayload<{ include: typeof sessionI
       description: session.world.description,
       premise: session.world.premise,
       storyGuide: session.world.storyGuide,
+      directorConfig: normalizeDirectorConfig(session.world.directorConfig),
     },
+    playerProfile: normalizePlayerProfile(session.playerProfile),
     characters,
     messages: session.messages.map((message) => ({
       id: message.id,
@@ -331,6 +347,7 @@ async function createSession(worldId: string, model = DEFAULT_DEEPSEEK_MODEL, is
       provider: "deepseek",
       model: normalizedModel,
       isSaved,
+      playerProfile: DEFAULT_PLAYER_PROFILE as unknown as Prisma.InputJsonValue,
       relationships: {
         create: world.characters.map((character) => ({
           character: { connect: { id: character.id } },
@@ -382,6 +399,8 @@ export async function getWorldSelectionData(): Promise<WorldSelectionData> {
       description: world.description,
       premise: world.premise,
       defaultScene: world.defaultScene,
+      directorConfig: normalizeDirectorConfig(world.directorConfig),
+      playerProfileTemplate: { ...DEFAULT_PLAYER_PROFILE },
       characterCount: world.characters.length,
       characters: world.characters.map((character) => ({
         id: character.id,
@@ -421,11 +440,12 @@ export async function createWorldCard(input: { name?: string; description?: stri
       defaultScene: input.defaultScene?.trim() || "A quiet room before the story begins.",
       defaultTime: "Day 1, evening",
       initialMemory: "The player has just entered this world.",
+      directorConfig: DEFAULT_DIRECTOR_CONFIG as unknown as Prisma.InputJsonValue,
       statusMetrics: [
-        { key: "trust", label: "Trust" },
-        { key: "affection", label: "Affection" },
-        { key: "tension", label: "Tension" },
-        { key: "curiosity", label: "Curiosity" },
+        { key: "trust", label: "Trust", max: 10 },
+        { key: "affection", label: "Affection", max: 10 },
+        { key: "tension", label: "Tension", max: 10 },
+        { key: "curiosity", label: "Curiosity", max: 10 },
       ],
       characters: {
         create: [
@@ -496,9 +516,20 @@ export async function getSessionDetail(sessionId: string) {
   return mapSession(session);
 }
 
-export async function updateWorldSettings(worldId: string, input: { name?: string; description?: string; premise?: string; storyGuide?: string; statusMetrics?: StatusMetricDefinition[] }) {
+export async function updateWorldSettings(
+  worldId: string,
+  input: {
+    name?: string;
+    description?: string;
+    premise?: string;
+    storyGuide?: string;
+    statusMetrics?: StatusMetricDefinition[];
+    directorConfig?: DirectorConfig;
+  },
+) {
   await ensureDatabaseSchema();
   const normalizedMetrics = input.statusMetrics === undefined ? undefined : normalizeStatusMetrics(input.statusMetrics);
+  const normalizedDirectorConfig = input.directorConfig === undefined ? undefined : normalizeDirectorConfig(input.directorConfig);
   const world = await prisma.world.update({
     where: { id: worldId },
     data: {
@@ -507,6 +538,7 @@ export async function updateWorldSettings(worldId: string, input: { name?: strin
       premise: input.premise?.trim(),
       storyGuide: input.storyGuide?.trim(),
       statusMetrics: normalizedMetrics as Prisma.InputJsonValue | undefined,
+      directorConfig: normalizedDirectorConfig as Prisma.InputJsonValue | undefined,
     },
   });
 
@@ -533,7 +565,17 @@ export async function updateWorldSettings(worldId: string, input: { name?: strin
     premise: world.premise,
     storyGuide: world.storyGuide,
     statusMetrics: normalizeStatusMetrics(world.statusMetrics),
+    directorConfig: normalizeDirectorConfig(world.directorConfig),
   };
+}
+
+export async function updatePlayerProfile(sessionId: string, playerProfile: PlayerProfile) {
+  await ensureDatabaseSchema();
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { playerProfile: normalizePlayerProfile(playerProfile) as unknown as Prisma.InputJsonValue },
+  });
+  return getSessionDetail(sessionId);
 }
 
 export async function updateCharacterSettings(characterId: string, input: { name?: string; gender?: string; roleLabel?: string; publicSummary?: string; secretSummary?: string; personalityTags?: string[] }) {
@@ -638,7 +680,12 @@ export async function deleteSessionById(sessionId: string, options?: { hydrateNe
   return { deletedSessionId: sessionId, nextSession, sessions: await listSessions(target.worldId) };
 }
 
-function computeRelationshipUpdates(relationships: RelationshipView[], characters: CharacterView[], statusMetrics: StatusMetricDefinition[], changes: HiddenStateUpdate["relationshipChanges"]) {
+function computeRelationshipUpdates(
+  relationships: RelationshipView[],
+  characters: CharacterView[],
+  statusMetrics: StatusMetricDefinition[],
+  changes: HiddenStateUpdate["relationshipChanges"],
+) {
   const byCharacterId = new Map(relationships.map((item) => [item.characterId, { ...item.metrics }]));
   for (const [compoundKey, delta] of Object.entries(changes)) {
     const matchedCharacter = characters.find((character) => compoundKey.startsWith(`${character.slug}_`));
@@ -734,7 +781,14 @@ export async function sendTurn(params: { sessionId: string; content: string; mod
         facts: sceneSnapshot.facts as Prisma.InputJsonValue,
       },
     }),
-    prisma.session.update({ where: { id: bundle.id }, data: { model, turnCount: turnNumber, title: buildSessionTitle(bundle.title, params.content, turnNumber) } }),
+    prisma.session.update({
+      where: { id: bundle.id },
+      data: {
+        model,
+        turnCount: turnNumber,
+        title: buildSessionTitle(bundle.title, params.content, turnNumber),
+      },
+    }),
   ];
 
   if (generated.hiddenStateUpdate.memorySummary) {

@@ -1,59 +1,53 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  applyMetricDeltas,
-  normalizeStatusMetrics,
-  syncMetricRecord,
-} from "./status-metrics";
+import { applyMetricDeltas, normalizeStatusMetrics, syncMetricRecord } from "./status-metrics";
 
-test("没有模板数据时使用默认状态栏", () => {
+test("falls back to the default metric template", () => {
   const metrics = normalizeStatusMetrics(null);
 
-  assert.deepEqual(metrics.map((metric) => metric.key), [
-    "trust",
-    "affection",
-    "tension",
-    "curiosity",
-  ]);
+  assert.deepEqual(
+    metrics.map((metric) => metric.key),
+    ["trust", "affection", "tension", "curiosity"],
+  );
 });
 
-test("状态栏模板会清理空项并保证 key 唯一", () => {
+test("normalization removes blanks, preserves labels, and deduplicates keys", () => {
   const metrics = normalizeStatusMetrics([
-    { key: "trust", label: "信任" },
-    { key: "trust", label: "信任变化" },
-    { key: "", label: "占有欲" },
+    { key: "trust", label: "Trust" },
+    { key: "trust", label: "Trust Shift" },
+    { key: "", label: "Possessiveness" },
     { key: "bad", label: "" },
   ]);
 
   assert.deepEqual(metrics, [
-    { key: "trust", label: "信任" },
-    { key: "trust_2", label: "信任变化" },
-    { key: "占有欲", label: "占有欲" },
+    { key: "trust", label: "Trust", max: 10 },
+    { key: "trust_2", label: "Trust Shift", max: 10 },
+    { key: "possessiveness", label: "Possessiveness", max: 10 },
   ]);
 });
 
-test("角色状态记录始终与世界模板一致", () => {
+test("metric records follow the world template and each metric's own cap", () => {
   const template = [
-    { key: "trust", label: "信任" },
-    { key: "possessiveness", label: "占有欲" },
+    { key: "trust", label: "Trust", max: 20 },
+    { key: "possessiveness", label: "Possessiveness", max: 6 },
   ];
 
   const record = syncMetricRecord(template, {
-    trust: 4,
+    trust: 14,
     affection: 9,
     possessiveness: 20,
   });
 
   assert.deepEqual(record, {
-    trust: 4,
-    possessiveness: 10,
+    trust: 14,
+    possessiveness: 6,
   });
 });
 
-test("AI 状态变化只更新模板内字段并限制在 0 到 10", () => {
+test("AI deltas update only declared metrics and stay within each cap", () => {
   const template = [
-    { key: "trust", label: "信任" },
-    { key: "jealousy", label: "嫉妒" },
+    { key: "trust", label: "Trust", max: 12 },
+    { key: "jealousy", label: "Jealousy", max: 5 },
   ];
 
   const record = applyMetricDeltas(
@@ -63,7 +57,7 @@ test("AI 状态变化只更新模板内字段并限制在 0 到 10", () => {
   );
 
   assert.deepEqual(record, {
-    trust: 10,
+    trust: 12,
     jealousy: 0,
   });
 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { deleteSessionById, getSessionDetail, saveSessionById } from "@/lib/session-service";
+import { deleteSessionById, getSessionDetail, listSessions, saveSessionById, updatePlayerProfile } from "@/lib/session-service";
+import type { PlayerProfile } from "@/lib/story-director";
 
 type RouteContext = {
   params: Promise<{
@@ -20,9 +21,18 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 }
 
-export async function PATCH(_request: Request, context: RouteContext) {
+export async function PATCH(request: Request, context: RouteContext) {
   try {
     const { sessionId } = await context.params;
+    const body = (await request.json().catch(() => ({}))) as {
+      playerProfile?: PlayerProfile;
+    };
+
+    if (body.playerProfile) {
+      const session = await updatePlayerProfile(sessionId, body.playerProfile);
+      return NextResponse.json({ session, sessions: await listSessions(session.world.id) });
+    }
+
     const payload = await saveSessionById(sessionId);
     return NextResponse.json(payload);
   } catch (error) {

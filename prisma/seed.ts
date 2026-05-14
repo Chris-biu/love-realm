@@ -1,4 +1,5 @@
-﻿import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import { DEFAULT_DIRECTOR_CONFIG, DEFAULT_PLAYER_PROFILE } from "@/lib/story-director";
 
 const prisma = new PrismaClient();
 
@@ -25,11 +26,16 @@ async function main() {
       defaultTime: "第 1 天，18:40",
       initialMemory:
         "玩家今天刚接手公馆，住客们对这位新任代管人仍在观望，彼此礼貌但并不真正信任。",
+      directorConfig: {
+        ...DEFAULT_DIRECTOR_CONFIG,
+        pacing: "balanced",
+        beatLabel: "克制暧昧、慢热升温、带轻悬疑的恋爱推进",
+      },
       statusMetrics: [
-        { key: "trust", label: "信任" },
-        { key: "affection", label: "好感" },
-        { key: "tension", label: "紧张" },
-        { key: "curiosity", label: "好奇" },
+        { key: "trust", label: "信任", max: 12 },
+        { key: "affection", label: "好感", max: 14 },
+        { key: "tension", label: "紧张", max: 10 },
+        { key: "curiosity", label: "好奇", max: 10 },
       ],
     },
   });
@@ -91,6 +97,42 @@ async function main() {
         },
       },
     ],
+  });
+
+  await prisma.session.create({
+    data: {
+      worldId: world.id,
+      title: "示例主角设定",
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+      isSaved: true,
+      playerProfile: {
+        ...DEFAULT_PLAYER_PROFILE,
+        displayName: "你",
+        role: "新任代管人",
+        publicPersona: "看似克制温和，实则擅长逼近真相。",
+        background: "离开旧城区多年后重返海边公馆。",
+        motivation: "在经营公馆的同时查清上一任代管人的失踪真相。",
+        speakingStyle: "表面礼貌，从不浪费问题。",
+      },
+      memorySummaries: {
+        create: {
+          turnNumber: 0,
+          content: world.initialMemory,
+        },
+      },
+      sceneStates: {
+        create: {
+          turnNumber: 0,
+          currentScene: world.defaultScene,
+          currentTime: world.defaultTime,
+          atmosphere: "克制而试探",
+          summary: world.defaultScene,
+          changes: [],
+          facts: [],
+        },
+      },
+    },
   });
 }
 

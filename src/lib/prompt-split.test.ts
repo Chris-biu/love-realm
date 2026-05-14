@@ -7,83 +7,130 @@ import type { SessionBundle } from "./session-service";
 const bundle = {
   id: "session-1",
   provider: "deepseek",
-  model: "deepseek-chat",
+  model: "deepseek-v4-flash",
   title: "Test",
-  turnCount: 0,
+  isSaved: false,
   world: {
     id: "world-1",
+    slug: "test-world",
     name: "Test World",
     description: "A contained test world.",
     premise: "A player meets two characters.",
     storyGuide: "Write immersive interactive fiction.",
+    directorConfig: {
+      pacing: "slow",
+      beatLabel: "slow-burn romance",
+      retrieval: {
+        memoryLimit: 2,
+        factLimit: 2,
+        dialogueLimit: 2,
+      },
+    },
   },
-  statusMetrics: [{ key: "trust", label: "Trust" }],
-  memorySummaries: [],
-  messages: [],
+  playerProfile: {
+    displayName: "Aster",
+    role: "new manager",
+    publicPersona: "calm, observant, and slow to trust",
+    background: "Returned after years away from the coast.",
+    motivation: "Find out why the former manager vanished.",
+    speakingStyle: "Speaks softly but asks very precise questions.",
+  },
+  statusMetrics: [{ key: "trust", label: "Trust", max: 20 }],
+  memorySummaries: [
+    {
+      id: "memory-1",
+      content: "Lin Yue noticed the player hiding a wet envelope.",
+      turnNumber: 2,
+      createdAt: new Date("2026-01-01T10:00:00Z").toISOString(),
+    },
+    {
+      id: "memory-2",
+      content: "The brass key opens the locked music room.",
+      turnNumber: 3,
+      createdAt: new Date("2026-01-01T11:00:00Z").toISOString(),
+    },
+  ],
+  messages: [
+    {
+      id: "message-1",
+      role: "USER",
+      content: "I ask about the key.",
+      turnNumber: 1,
+      createdAt: new Date("2026-01-01T10:00:00Z").toISOString(),
+    },
+    {
+      id: "message-2",
+      role: "ASSISTANT",
+      content: "Lin Yue looks at the brass key before answering.",
+      turnNumber: 1,
+      createdAt: new Date("2026-01-01T10:00:30Z").toISOString(),
+    },
+  ],
   characters: [
     {
       id: "character-1",
-      worldId: "world-1",
-      name: "Lin Yue",
       slug: "lin_yue",
+      name: "Lin Yue",
       gender: "female",
       roleLabel: "Lead",
       publicSummary: "Calm and observant.",
       secretSummary: "Tests whether the player is sincere.",
       personalityTags: ["reserved"],
+      initialMetrics: { trust: 5 },
       runtimeState: {
-        currentIdentity: { value: "玩家的女朋友", source: "PLAYER" },
-        currentRelationship: { value: "恋人", source: "PLAYER" },
-        attitudeTowardPlayer: { value: "亲密但嘴硬", source: "AI" },
-        playerAddress: { value: "亲爱的", source: "PLAYER" },
-        persistentFacts: { value: ["她已经接受玩家告白"], source: "PLAYER" },
+        currentIdentity: { value: "Player's girlfriend", source: "PLAYER" },
+        currentRelationship: { value: "Lovers", source: "PLAYER" },
+        attitudeTowardPlayer: { value: "Warm but guarded", source: "AI" },
+        playerAddress: { value: "dear", source: "PLAYER" },
+        persistentFacts: {
+          value: ["She accepted the player's confession."],
+          source: "PLAYER",
+        },
       },
     },
   ],
   relationships: [
     {
       id: "relationship-1",
-      sessionId: "session-1",
       characterId: "character-1",
+      metrics: { trust: 5 },
+      dynamicProfile: {
+        currentIdentity: { value: "Player's girlfriend", source: "PLAYER" },
+        currentRelationship: { value: "Lovers", source: "PLAYER" },
+        attitudeTowardPlayer: { value: "Warm but guarded", source: "AI" },
+        playerAddress: { value: "dear", source: "PLAYER" },
+        persistentFacts: {
+          value: ["She accepted the player's confession."],
+          source: "PLAYER",
+        },
+      },
+      note: null,
       character: {
         id: "character-1",
-        worldId: "world-1",
-        name: "Lin Yue",
         slug: "lin_yue",
+        name: "Lin Yue",
         gender: "female",
-        roleLabel: "Lead",
-        publicSummary: "Calm and observant.",
-        secretSummary: "Tests whether the player is sincere.",
-      personalityTags: ["reserved"],
-      runtimeState: {
-        currentIdentity: { value: "玩家的女朋友", source: "PLAYER" },
-        currentRelationship: { value: "恋人", source: "PLAYER" },
-        attitudeTowardPlayer: { value: "亲密但嘴硬", source: "AI" },
-        playerAddress: { value: "亲爱的", source: "PLAYER" },
-        persistentFacts: { value: ["她已经接受玩家告白"], source: "PLAYER" },
       },
-    },
-      metrics: { trust: 5 },
     },
   ],
   sceneState: {
-    id: "scene-1",
-    sessionId: "session-1",
-    turnNumber: 0,
-    currentScene: "Bedroom",
+    currentScene: "The dim upstairs corridor",
     currentTime: "Night",
-    atmosphere: "Tense",
-    summary: "The player enters the room.",
-    changes: [],
-    facts: [],
+    atmosphere: "Quiet and suspicious",
+    summary: "The player and Lin Yue stop outside the locked music room.",
+    changes: ["They stopped in front of the locked music room."],
+    facts: ["The brass key feels warm in the player's palm."],
   },
+  suggestedPrompts: [],
 } satisfies SessionBundle;
 
 test("narrative prompt asks for plain long-form prose instead of JSON", () => {
-  const prompts = buildNarrativePrompts(bundle, "Approach Lin Yue.", { minimumReplyLength: 3000 });
+  const prompts = buildNarrativePrompts(bundle, "Ask Lin Yue about the brass key.", {
+    minimumReplyLength: 3000,
+  });
 
-  assert.match(prompts.systemPrompt, /不要输出 JSON/);
-  assert.match(prompts.systemPrompt, /不少于 3000/);
+  assert.match(prompts.systemPrompt, /JSON/i);
+  assert.match(prompts.systemPrompt, /3000/);
   assert.doesNotMatch(prompts.systemPrompt, /hiddenStateUpdate/);
 });
 
@@ -91,39 +138,48 @@ test("default minimum reply length is lighter for normal play", () => {
   assert.equal(DEFAULT_MINIMUM_REPLY_LENGTH, 800);
 });
 
-test("narrative prompt constrains important characters to the character cards", () => {
-  const prompts = buildNarrativePrompts(bundle, "Approach Lin Yue.");
+test("narrative prompt includes the player-defined protagonist profile", () => {
+  const prompts = buildNarrativePrompts(bundle, "Ask Lin Yue about the brass key.");
 
-  assert.match(prompts.systemPrompt, /不得新增重要角色/);
-  assert.match(prompts.userPrompt, /Lin Yue/);
-  assert.match(prompts.userPrompt, /lin_yue/);
+  assert.match(prompts.userPrompt, /Aster/);
+  assert.match(prompts.userPrompt, /new manager/);
+  assert.match(prompts.userPrompt, /Find out why the former manager vanished/);
 });
 
-test("state update prompt asks for compact JSON after the final visible reply exists", () => {
-  const prompts = buildStateUpdatePrompts(bundle, "Approach Lin Yue.", "Final narrative text.");
+test("narrative prompt exposes pacing and per-metric max values", () => {
+  const prompts = buildNarrativePrompts(bundle, "Ask Lin Yue about the brass key.");
 
-  assert.match(prompts.systemPrompt, /只输出严格 JSON/);
-  assert.match(prompts.userPrompt, /Final narrative text/);
+  assert.match(prompts.userPrompt, /Trust/);
+  assert.match(prompts.userPrompt, /max=20/);
+  assert.match(prompts.systemPrompt, /slow-burn romance/);
+});
+
+test("prompt injects retrieved context related to the latest input", () => {
+  const prompts = buildNarrativePrompts(bundle, "Ask Lin Yue whether the brass key opens the music room.");
+
+  assert.match(prompts.userPrompt, /brass key opens the locked music room/i);
+  assert.match(prompts.userPrompt, /Lin Yue looks at the brass key before answering/i);
+});
+
+test("state update prompt asks for compact JSON after the visible reply exists", () => {
+  const prompts = buildStateUpdatePrompts(
+    bundle,
+    "Ask Lin Yue about the brass key.",
+    "Lin Yue studies the key in silence before she answers.",
+  );
+
+  assert.match(prompts.systemPrompt, /JSON/i);
+  assert.match(prompts.userPrompt, /Lin Yue studies the key/);
   assert.match(prompts.systemPrompt, /hiddenStateUpdate/);
 });
 
-test("state update prompt must not promote invented characters into memory", () => {
-  const prompts = buildStateUpdatePrompts(bundle, "Approach Lin Yue.", "Final narrative text.");
+test("state update prompt keeps manual character fields protected while allowing updates", () => {
+  const prompts = buildStateUpdatePrompts(
+    bundle,
+    "Ask Lin Yue about the brass key.",
+    "Lin Yue studies the key in silence before she answers.",
+  );
 
-  assert.match(prompts.systemPrompt, /不得把模型临时生成的无名背景人物写成重要人物/);
-});
-
-test("prompt injects dynamic character state above initial role labels", () => {
-  const prompts = buildNarrativePrompts(bundle, "Approach Lin Yue.");
-
-  assert.match(prompts.userPrompt, /当前身份：玩家的女朋友/);
-  assert.match(prompts.userPrompt, /初始身份标签：Lead/);
-  assert.match(prompts.systemPrompt, /动态档案与初始角色卡冲突时，必须以动态档案为准/);
-});
-
-test("state update prompt asks model to maintain dynamic character state without overriding manual fields", () => {
-  const prompts = buildStateUpdatePrompts(bundle, "Approach Lin Yue.", "Final narrative text.");
-
-  assert.match(prompts.systemPrompt, /characterStateUpdates/);
-  assert.match(prompts.systemPrompt, /玩家手动设定来源为 PLAYER/);
+  assert.match(prompts.systemPrompt, /PLAYER/);
+  assert.match(prompts.systemPrompt, /persistentFacts/);
 });

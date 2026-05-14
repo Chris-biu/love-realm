@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { RELATIONSHIP_MAX, clampRelationshipMetric, getRelationshipStage } from "@/lib/relationship-scale";
 import { buildSessionDeletePlan, removeSessionFromList } from "@/lib/session-delete";
 import { buildSessionUrl } from "@/lib/session-url";
-import { DEFAULT_MINIMUM_REPLY_LENGTH, MINIMUM_REPLY_LENGTH_MAX, MINIMUM_REPLY_LENGTH_MIN, normalizeMinimumReplyLength } from "@/lib/config";
+import {
+  DEFAULT_MINIMUM_REPLY_LENGTH,
+  MINIMUM_REPLY_LENGTH_MAX,
+  MINIMUM_REPLY_LENGTH_MIN,
+  normalizeMinimumReplyLength,
+} from "@/lib/config";
+import { clampRelationshipMetric, getMetricMax, getRelationshipStage } from "@/lib/relationship-scale";
 import type { AppBootstrap, SessionBundle, SessionListItem } from "@/lib/session-service";
 import type { StatusMetricDefinition } from "@/lib/status-metrics";
+import type { DirectorConfig, PlayerProfile } from "@/lib/story-director";
 
 type ChatAppProps = {
   initialData: AppBootstrap;
@@ -22,7 +28,10 @@ type WorldDraft = {
   description: string;
   premise: string;
   storyGuide: string;
+  directorConfig: DirectorConfig;
 };
+
+type PlayerProfileDraft = PlayerProfile;
 
 type CharacterDraft = {
   id: string;
@@ -44,8 +53,8 @@ const API_KEY_STORAGE_KEY = "moonlit_residence_deepseek_api_key";
 const MODEL_LABELS: Record<string, string> = {
   "deepseek-v4-flash": "DeepSeek V4 Flash",
   "deepseek-v4-pro": "DeepSeek V4 Pro",
-  "deepseek-chat": "旧版兼容：Chat",
-  "deepseek-reasoner": "旧版兼容：Reasoner",
+  "deepseek-chat": "DeepSeek Chat",
+  "deepseek-reasoner": "DeepSeek Reasoner",
 };
 
 const STARTER_PROMPTS = [
@@ -68,7 +77,12 @@ function createWorldDraft(session: SessionBundle): WorldDraft {
     description: session.world.description,
     premise: session.world.premise,
     storyGuide: session.world.storyGuide,
+    directorConfig: session.world.directorConfig,
   };
+}
+
+function createPlayerProfileDraft(session: SessionBundle): PlayerProfileDraft {
+  return { ...session.playerProfile };
 }
 
 function createCharacterDrafts(session: SessionBundle): CharacterDraft[] {
@@ -91,11 +105,23 @@ function createCharacterDrafts(session: SessionBundle): CharacterDraft[] {
 async function readJson<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => null)) as T | null;
   if (!response.ok) {
-    const message = typeof data === "object" && data && "error" in data && typeof data.error === "string" ? data.error : "请求失败";
+    const message = typeof data === "object" && data && "error" in data && typeof data.error === "string"
+      ? data.error
+      : "请求失败";
     throw new Error(message);
   }
   if (!data) throw new Error("服务端返回为空");
   return data;
+}
+
+function getPacingLabel(pacing: DirectorConfig["pacing"]) {
+  if (pacing === "slow") return "慢热";
+  if (pacing === "fast") return "快节奏";
+  return "均衡";
+}
+
+function summarizePlayerProfile(profile: PlayerProfile) {
+  return [profile.role, profile.publicPersona, profile.motivation].filter(Boolean).join(" · ");
 }
 
 export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
@@ -108,12 +134,13 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
   const [novelExportMode, setNovelExportMode] = useState<NovelExportMode>("polished");
   const [novelExportTurns, setNovelExportTurns] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState("剧情舞台已就绪。");
+  const [feedback, setFeedback] = useState("舞台已就绪。");
   const [feedbackTone, setFeedbackTone] = useState<FeedbackTone>("default");
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(initialSessionId);
   const [apiKey, setApiKey] = useState("");
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [worldDraft, setWorldDraft] = useState<WorldDraft>(() => createWorldDraft(initialData.activeSession));
+  const [playerProfileDraft, setPlayerProfileDraft] = useState<PlayerProfileDraft>(() => createPlayerProfileDraft(initialData.activeSession));
   const [characterDrafts, setCharacterDrafts] = useState<CharacterDraft[]>(() => createCharacterDrafts(initialData.activeSession));
   const [statusMetricDrafts, setStatusMetricDrafts] = useState<StatusMetricDefinition[]>(() => initialData.activeSession.statusMetrics.map((metric) => ({ ...metric })));
   const [drawerView, setDrawerView] = useState<DrawerView>("none");
@@ -131,6 +158,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
 
   useEffect(() => {
     setWorldDraft(createWorldDraft(activeSession));
+    setPlayerProfileDraft(createPlayerProfileDraft(activeSession));
     setCharacterDrafts(createCharacterDrafts(activeSession));
     setStatusMetricDrafts(activeSession.statusMetrics.map((metric) => ({ ...metric })));
   }, [activeSession]);
@@ -207,7 +235,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
       setActiveSession(payload.session);
       setSelectedModel(payload.session.model);
       syncSessionUrl(payload.session.id);
-      updateFeedback("新的临时剧情已创建，保存后会成为章节分支。", "success");
+      updateFeedback("新的临时剧情已创建。", "success");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "创建会话失败。");
     } finally {
@@ -228,6 +256,28 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
       updateFeedback("当前进度已保存为章节。", "success");
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "保存进度失败。");
+    } finally {
+      setIsWorking(false);
+    }
+  }
+
+  async function savePlayerProfile() {
+    setError(null);
+    setIsWorking(true);
+    updateFeedback("正在保存主角设定...", "pending");
+    try {
+      const payload = await readJson<{ session: SessionBundle; sessions: SessionListItem[] }>(
+        await fetch(`/api/sessions/${activeSession.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerProfile: playerProfileDraft }),
+        }),
+      );
+      setActiveSession(payload.session);
+      setSessions(payload.sessions);
+      updateFeedback("主角设定已保存。", "success");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "保存主角设定失败。");
     } finally {
       setIsWorking(false);
     }
@@ -266,16 +316,26 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     setIsWorking(true);
     updateFeedback("正在保存世界设定...", "pending");
     try {
-      const payload = await readJson<{ world: SessionBundle["world"] & { statusMetrics: StatusMetricDefinition[] } }>(
+      const payload = await readJson<{ world: SessionBundle["world"] & { statusMetrics: StatusMetricDefinition[]; directorConfig: DirectorConfig } }>(
         await fetch(`/api/worlds/${activeSession.world.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...worldDraft, statusMetrics: statusMetricDrafts }),
+          body: JSON.stringify({
+            name: worldDraft.name,
+            description: worldDraft.description,
+            premise: worldDraft.premise,
+            storyGuide: worldDraft.storyGuide,
+            statusMetrics: statusMetricDrafts,
+            directorConfig: worldDraft.directorConfig,
+          }),
         }),
       );
       setActiveSession((current) => ({
         ...current,
-        world: payload.world,
+        world: {
+          ...current.world,
+          ...payload.world,
+        },
         statusMetrics: payload.world.statusMetrics,
         relationships: current.relationships.map((relationship) => ({
           ...relationship,
@@ -331,14 +391,6 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
       );
       if (payload.session) {
         setActiveSession(payload.session);
-      } else {
-        setActiveSession((current) => ({
-          ...current,
-          characters: current.characters.map((item) => (item.id === characterId ? { ...item, ...payload.character } : item)),
-          relationships: current.relationships.map((item) =>
-            item.character.id === characterId ? { ...item, character: { ...item.character, name: payload.character.name, gender: payload.character.gender } } : item,
-          ),
-        }));
       }
       updateFeedback("角色设定已保存。", "success");
     } catch (caughtError) {
@@ -389,7 +441,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
   }
 
   function addStatusMetricDraft() {
-    setStatusMetricDrafts((current) => [...current, { key: `custom_${current.length + 1}`, label: "新状态" }]);
+    setStatusMetricDrafts((current) => [...current, { key: `custom_${current.length + 1}`, label: "新状态", max: 10 }]);
   }
 
   function removeStatusMetricDraft(index: number) {
@@ -468,21 +520,28 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
 
   return (
     <>
-      <main className="story-shell">
+      <main className="story-shell story-shell-rich">
         <aside className="story-sidebar">
-          <section className="panel relationship-panel">
+          <section className="panel relationship-panel panel-elevated">
             <div className="section-header">
               <div>
-                <p className="eyebrow">关系状态</p>
+                <p className="eyebrow">关系面板</p>
                 <h2>角色温度</h2>
               </div>
               <button className="secondary-button" onClick={createSession} disabled={isWorking || Boolean(deletingSessionId)}>新分支</button>
             </div>
+
+            <div className="relationship-focus">
+              <span className="focus-label">主角档案</span>
+              <strong>{activeSession.playerProfile.displayName}</strong>
+              <p>{summarizePlayerProfile(activeSession.playerProfile) || "还没有为这一条剧情分支设定主角风格。"}</p>
+            </div>
+
             <div className="relationship-stack">
               {activeSession.relationships.map((item) => {
                 const character = activeSession.characters.find((entry) => entry.id === item.characterId);
                 return (
-                  <article key={item.id} className="relationship-card">
+                  <article key={item.id} className="relationship-card relationship-card-rich">
                     <div className="relationship-topline">
                       <div>
                         <strong>{item.character.name}</strong>
@@ -491,15 +550,16 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                     </div>
                     <div className="metric-chip-row">
                       {activeSession.statusMetrics.map((metric) => {
-                        const value = clampRelationshipMetric(item.metrics[metric.key] ?? 0);
+                        const max = getMetricMax(metric);
+                        const value = clampRelationshipMetric(item.metrics[metric.key] ?? 0, max);
                         return (
                           <div key={metric.key} className="metric-meter">
                             <div className="metric-meter-topline">
                               <span>{metric.label}</span>
-                              <strong>{value}/{RELATIONSHIP_MAX}</strong>
+                              <strong>{value}/{max}</strong>
                             </div>
-                            <div className="metric-meter-track"><span className="metric-meter-fill" style={{ width: `${(value / RELATIONSHIP_MAX) * 100}%` }} /></div>
-                            <span className="metric-stage">{getRelationshipStage(value, metric.key)}</span>
+                            <div className="metric-meter-track"><span className="metric-meter-fill" style={{ width: `${(value / max) * 100}%` }} /></div>
+                            <span className="metric-stage">{getRelationshipStage(value, metric.key, max)}</span>
                           </div>
                         );
                       })}
@@ -511,7 +571,12 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
           </section>
 
           <section className="panel session-panel">
-            <div className="section-header"><div><p className="eyebrow">剧情分支</p><h2>章节存档</h2></div></div>
+            <div className="section-header">
+              <div>
+                <p className="eyebrow">剧情分支</p>
+                <h2>章节存档</h2>
+              </div>
+            </div>
             <div className="session-list">
               {sessions.map((session, index) => (
                 <div key={session.id} className="session-row">
@@ -530,11 +595,35 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
         </aside>
 
         <section className="story-main">
-          <section className="chat-stage panel">
-            <div className="chat-toolbar">
-              <div>
+          <section className="chat-stage panel story-stage-rich">
+            <div className="scene-stage hero-stage">
+              <div className="scene-copy">
                 <p className="eyebrow">{activeSession.world.name}</p>
                 <h2>{activeSession.sceneState.currentScene}</h2>
+                <p className="scene-summary">{activeSession.sceneState.summary}</p>
+                <div className="scene-detail-row">
+                  <span className="scene-badge">{activeSession.sceneState.currentTime}</span>
+                  <span className="scene-badge">{activeSession.sceneState.atmosphere}</span>
+                  <span className="scene-badge">节奏：{getPacingLabel(activeSession.world.directorConfig.pacing)}</span>
+                </div>
+              </div>
+              <div className="hero-stage-aside">
+                <div className="memory-glance">
+                  <span className="memory-label">RAG 记忆焦点</span>
+                  <p>{latestMemory}</p>
+                </div>
+                <div className="hero-stage-profile">
+                  <span className="memory-label">当前主角</span>
+                  <strong>{activeSession.playerProfile.displayName}</strong>
+                  <p>{activeSession.playerProfile.role}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="chat-toolbar">
+              <div>
+                <p className="eyebrow">叙事状态</p>
+                <h2>本轮推进</h2>
               </div>
               <div className="chat-toolbar-actions">
                 <span className={`inline-status ${feedbackTone}`}>{error || feedback}</span>
@@ -550,7 +639,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                 <div className="empty-state narrative-empty">
                   <div className="empty-copy">
                     <h3>从一句试探开始。</h3>
-                    <p>输入对白或行动，系统会推进场景、关系和记忆。</p>
+                    <p>输入对白或行动，系统会结合主角档案、RAG 记忆与角色状态推进场景。</p>
                   </div>
                 </div>
               ) : (
@@ -560,8 +649,8 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                     if (message.role === "USER") {
                       return (
                         <article key={message.id} className="dialogue-row player-dialogue">
-                          <div className="player-action-bubble">
-                            <span>你的行动</span>
+                          <div className="player-action-bubble player-action-bubble-rich">
+                            <span>{activeSession.playerProfile.displayName} 的行动</span>
                             <p>{message.content}</p>
                           </div>
                         </article>
@@ -569,7 +658,7 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                     }
                     return (
                       <article key={message.id} className="dialogue-row assistant-dialogue">
-                        <div className="assistant-story-text">
+                        <div className="assistant-story-text assistant-story-card">
                           {paragraphs.map((paragraph, index) => <p key={`${message.id}-${index}`}>{paragraph}</p>)}
                         </div>
                       </article>
@@ -579,7 +668,11 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
               )}
             </div>
 
-            <div className="action-strip"><span className="action-strip-label">可以这样继续</span>{actionPrompts.map((prompt) => <button key={prompt} className="action-pill" type="button" onClick={() => setInput(prompt)} disabled={isWorking}>{prompt}</button>)}</div>
+            <div className="action-strip">
+              <span className="action-strip-label">你可以这样继续</span>
+              {actionPrompts.map((prompt) => <button key={prompt} className="action-pill" type="button" onClick={() => setInput(prompt)} disabled={isWorking}>{prompt}</button>)}
+            </div>
+
             <div className="composer">
               <div className="reply-length-control">
                 <label>
@@ -603,20 +696,40 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
       </main>
 
       <div className={`console-backdrop ${drawerView !== "none" ? "open" : ""}`} onClick={() => setDrawerView("none")} aria-hidden={drawerView === "none"} />
+
       <aside className={`stage-info-drawer ${drawerView === "stage" ? "open" : ""}`}>
         <div className="settings-drawer-header"><div><p className="eyebrow">回忆与场景</p><h2>{activeSession.world.name}</h2></div><button className="ghost-button" type="button" onClick={() => setDrawerView("none")}>收起</button></div>
         <div className="settings-drawer-scroll">
           <section className="settings-section"><h3>当前场景</h3><div className="scene-copy"><h2>{activeSession.sceneState.currentScene}</h2><p className="scene-summary">{activeSession.sceneState.summary}</p><div className="scene-detail-row"><span className="scene-badge">时间：{activeSession.sceneState.currentTime}</span><span className="scene-badge">氛围：{activeSession.sceneState.atmosphere}</span></div></div></section>
           <section className="settings-section"><h3>长期记忆</h3><p className="compact-text">{latestMemory}</p></section>
           <section className="settings-section"><h3>世界前提</h3><p className="compact-text">{activeSession.world.premise}</p></section>
+          <section className="settings-section"><h3>主角档案快照</h3><p className="compact-text">{summarizePlayerProfile(activeSession.playerProfile)}</p></section>
         </div>
       </aside>
 
-      <aside className={`settings-drawer ${drawerView === "backstage" ? "open" : ""}`}>
+      <aside className={`settings-drawer settings-drawer-wide ${drawerView === "backstage" ? "open" : ""}`}>
         <div className="settings-drawer-header"><div><p className="eyebrow">设定与配置</p><h2>幕后工作台</h2></div><button className="ghost-button" type="button" onClick={() => setDrawerView("none")}>收起</button></div>
         <div className="settings-drawer-scroll">
           <section className="settings-section">
-            <div className="subsection-header"><div><h3>世界设定</h3><p className="muted compact-text">修改后影响后续剧情生成。</p></div><button className="secondary-button" onClick={saveWorldSettings} disabled={isWorking} type="button">保存</button></div>
+            <div className="subsection-header">
+              <div>
+                <h3>主角设定</h3>
+                <p className="muted compact-text">每条剧情分支都可以单独定义主角身份、背景、目标与说话风格。</p>
+              </div>
+              <button className="secondary-button" onClick={savePlayerProfile} disabled={isWorking} type="button">保存</button>
+            </div>
+            <div className="form-stack">
+              <label className="field-block"><span className="field-label">主角显示名</span><input className="api-key-input" value={playerProfileDraft.displayName} onChange={(event) => setPlayerProfileDraft((current) => ({ ...current, displayName: event.target.value }))} /></label>
+              <label className="field-block"><span className="field-label">主角身份</span><input className="api-key-input" value={playerProfileDraft.role} onChange={(event) => setPlayerProfileDraft((current) => ({ ...current, role: event.target.value }))} /></label>
+              <label className="field-block"><span className="field-label">表层人设</span><textarea value={playerProfileDraft.publicPersona} onChange={(event) => setPlayerProfileDraft((current) => ({ ...current, publicPersona: event.target.value }))} rows={2} /></label>
+              <label className="field-block"><span className="field-label">背景</span><textarea value={playerProfileDraft.background} onChange={(event) => setPlayerProfileDraft((current) => ({ ...current, background: event.target.value }))} rows={2} /></label>
+              <label className="field-block"><span className="field-label">当前动机</span><textarea value={playerProfileDraft.motivation} onChange={(event) => setPlayerProfileDraft((current) => ({ ...current, motivation: event.target.value }))} rows={2} /></label>
+              <label className="field-block"><span className="field-label">说话风格</span><textarea value={playerProfileDraft.speakingStyle} onChange={(event) => setPlayerProfileDraft((current) => ({ ...current, speakingStyle: event.target.value }))} rows={2} /></label>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <div className="subsection-header"><div><h3>世界设定</h3><p className="muted compact-text">世界设定会影响当前世界下所有新旧剧情分支。</p></div><button className="secondary-button" onClick={saveWorldSettings} disabled={isWorking} type="button">保存</button></div>
             <div className="form-stack">
               <label className="field-block"><span className="field-label">世界名称</span><input className="api-key-input" value={worldDraft.name} onChange={(event) => setWorldDraft((current) => ({ ...current, name: event.target.value }))} /></label>
               <label className="field-block"><span className="field-label">世界简介</span><textarea value={worldDraft.description} onChange={(event) => setWorldDraft((current) => ({ ...current, description: event.target.value }))} rows={3} /></label>
@@ -626,19 +739,51 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
           </section>
 
           <section className="settings-section">
-            <div className="subsection-header"><div><h3>角色状态栏</h3><p className="muted compact-text">同一世界角色共用这套状态栏。</p></div><button className="secondary-button" type="button" onClick={addStatusMetricDraft}>新增状态</button></div>
-            <div className="form-stack">{statusMetricDrafts.map((metric, index) => <div key={`${metric.key}-${index}`} className="metric-editor-row"><label className="field-block"><span className="field-label">状态 key</span><input className="api-key-input" value={metric.key} onChange={(event) => updateStatusMetricDraft(index, { key: event.target.value })} /></label><label className="field-block"><span className="field-label">显示名称</span><input className="api-key-input" value={metric.label} onChange={(event) => updateStatusMetricDraft(index, { label: event.target.value })} /></label><button className="ghost-button danger-button" type="button" onClick={() => removeStatusMetricDraft(index)}>删除</button></div>)}</div>
+            <div className="subsection-header">
+              <div>
+                <h3>导演节奏与 RAG</h3>
+                <p className="muted compact-text">用节奏和检索窗口控制关系升温速度、信息密度和整体游戏时长。</p>
+              </div>
+            </div>
+            <div className="form-stack">
+              <label className="field-block">
+                <span className="field-label">推进速度</span>
+                <select className="api-key-input" value={worldDraft.directorConfig.pacing} onChange={(event) => setWorldDraft((current) => ({ ...current, directorConfig: { ...current.directorConfig, pacing: event.target.value as DirectorConfig["pacing"] } }))}>
+                  <option value="slow">慢热</option>
+                  <option value="balanced">均衡</option>
+                  <option value="fast">快节奏</option>
+                </select>
+              </label>
+              <label className="field-block"><span className="field-label">目标体验标签</span><input className="api-key-input" value={worldDraft.directorConfig.beatLabel} onChange={(event) => setWorldDraft((current) => ({ ...current, directorConfig: { ...current.directorConfig, beatLabel: event.target.value } }))} /></label>
+              <div className="metric-editor-row metric-editor-row-three">
+                <label className="field-block"><span className="field-label">记忆检索条数</span><input className="api-key-input" type="number" min={1} max={12} value={worldDraft.directorConfig.retrieval.memoryLimit} onChange={(event) => setWorldDraft((current) => ({ ...current, directorConfig: { ...current.directorConfig, retrieval: { ...current.directorConfig.retrieval, memoryLimit: Number(event.target.value) || 1 } } }))} /></label>
+                <label className="field-block"><span className="field-label">事实检索条数</span><input className="api-key-input" type="number" min={1} max={12} value={worldDraft.directorConfig.retrieval.factLimit} onChange={(event) => setWorldDraft((current) => ({ ...current, directorConfig: { ...current.directorConfig, retrieval: { ...current.directorConfig.retrieval, factLimit: Number(event.target.value) || 1 } } }))} /></label>
+                <label className="field-block"><span className="field-label">对话检索条数</span><input className="api-key-input" type="number" min={2} max={12} value={worldDraft.directorConfig.retrieval.dialogueLimit} onChange={(event) => setWorldDraft((current) => ({ ...current, directorConfig: { ...current.directorConfig, retrieval: { ...current.directorConfig.retrieval, dialogueLimit: Number(event.target.value) || 2 } } }))} /></label>
+              </div>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <div className="subsection-header"><div><h3>角色状态栏</h3><p className="muted compact-text">每个状态都可以独立设置上限，用来控制升温曲线与整体节奏。</p></div><button className="secondary-button" type="button" onClick={addStatusMetricDraft}>新增状态</button></div>
+            <div className="form-stack">
+              {statusMetricDrafts.map((metric, index) => (
+                <div key={`${metric.key}-${index}`} className="metric-editor-row metric-editor-row-three">
+                  <label className="field-block"><span className="field-label">状态 key</span><input className="api-key-input" value={metric.key} onChange={(event) => updateStatusMetricDraft(index, { key: event.target.value })} /></label>
+                  <label className="field-block"><span className="field-label">显示名称</span><input className="api-key-input" value={metric.label} onChange={(event) => updateStatusMetricDraft(index, { label: event.target.value })} /></label>
+                  <label className="field-block"><span className="field-label">满分</span><input className="api-key-input" type="number" min={3} max={100} value={metric.max ?? 10} onChange={(event) => updateStatusMetricDraft(index, { max: Number(event.target.value) || 10 })} /></label>
+                  <button className="ghost-button danger-button metric-remove-button" type="button" onClick={() => removeStatusMetricDraft(index)}>删除</button>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="settings-section">
             <div className="subsection-header">
               <div>
                 <h3>角色设定</h3>
-                <p className="muted compact-text">角色可新增、编辑或删除。</p>
+                <p className="muted compact-text">角色可新增、编辑或删除。手动修订后的不可遗忘事实不再冻结，AI 会继续补充新增事实。</p>
               </div>
-              <button className="secondary-button" type="button" onClick={createCharacter} disabled={isWorking}>
-                新增角色
-              </button>
+              <button className="secondary-button" type="button" onClick={createCharacter} disabled={isWorking}>新增角色</button>
             </div>
             <div className="character-editor-list">
               {characterDrafts.map((draft) => (
@@ -646,12 +791,8 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                   <div className="subsection-header">
                     <h3>{draft.name || "未命名角色"}</h3>
                     <div className="inline-actions compact-actions">
-                      <button className="secondary-button" type="button" onClick={() => saveCharacterSettings(draft.id)} disabled={isWorking}>
-                        保存
-                      </button>
-                      <button className="ghost-button danger-button" type="button" onClick={() => deleteCharacter(draft.id)} disabled={isWorking || activeSession.characters.length <= 1}>
-                        删除
-                      </button>
+                      <button className="secondary-button" type="button" onClick={() => saveCharacterSettings(draft.id)} disabled={isWorking}>保存</button>
+                      <button className="ghost-button danger-button" type="button" onClick={() => deleteCharacter(draft.id)} disabled={isWorking || activeSession.characters.length <= 1}>删除</button>
                     </div>
                   </div>
                   <div className="form-stack">
@@ -667,8 +808,8 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                       <label className="field-block"><span className="field-label">当前关系</span><input className="api-key-input" value={draft.currentRelationship} onChange={(event) => updateCharacterDraft(draft.id, { currentRelationship: event.target.value })} /></label>
                       <label className="field-block"><span className="field-label">对玩家态度</span><input className="api-key-input" value={draft.attitudeTowardPlayer} onChange={(event) => updateCharacterDraft(draft.id, { attitudeTowardPlayer: event.target.value })} /></label>
                       <label className="field-block"><span className="field-label">对玩家称呼</span><input className="api-key-input" value={draft.playerAddress} onChange={(event) => updateCharacterDraft(draft.id, { playerAddress: event.target.value })} /></label>
-                      <label className="field-block"><span className="field-label">不可遗忘事实</span><textarea value={draft.persistentFactsText} onChange={(event) => updateCharacterDraft(draft.id, { persistentFactsText: event.target.value })} rows={3} placeholder="每行一条事实" /></label>
-                      <p className="muted compact-text">AI 会自动维护，但玩家手动修改的字段优先级最高。</p>
+                      <label className="field-block"><span className="field-label">不可遗忘事实</span><textarea value={draft.persistentFactsText} onChange={(event) => updateCharacterDraft(draft.id, { persistentFactsText: event.target.value })} rows={4} placeholder="每行一条事实" /></label>
+                      <p className="muted compact-text">用户手动修订的事实将被保留，后续 AI 只会补充新增事实，不会再把这一栏锁死。</p>
                     </div>
                   </div>
                 </div>

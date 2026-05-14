@@ -58,6 +58,10 @@ function normalizeFactsField(value: unknown): RuntimeFactsField {
   };
 }
 
+function dedupeFacts(values: string[]) {
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean))).slice(0, 12);
+}
+
 export function normalizeCharacterRuntimeState(value: Prisma.JsonValue | unknown): CharacterRuntimeState {
   if (!value || typeof value !== "object" || Array.isArray(value)) return structuredClone(EMPTY_STATE);
   const state = value as Record<string, unknown>;
@@ -78,10 +82,27 @@ function mergeTextField(current: RuntimeTextField, next: string | undefined, sou
 }
 
 function mergeFactsField(current: RuntimeFactsField, next: string[] | undefined, source: RuntimeStateSource) {
-  const value = next?.map((item) => item.trim()).filter(Boolean);
-  if (!value?.length) return current;
-  if (current.source === "PLAYER" && source === "AI") return current;
-  return { value: Array.from(new Set(value)).slice(0, 8), source };
+  const incoming = dedupeFacts(next ?? []);
+  if (!incoming.length) return current;
+
+  if (source === "PLAYER") {
+    return {
+      value: incoming,
+      source: "PLAYER" as RuntimeStateSource,
+    };
+  }
+
+  if (current.source === "PLAYER") {
+    return {
+      value: dedupeFacts([...current.value, ...incoming]),
+      source: "PLAYER" as RuntimeStateSource,
+    };
+  }
+
+  return {
+    value: dedupeFacts(incoming),
+    source,
+  };
 }
 
 export function mergeCharacterRuntimeState(

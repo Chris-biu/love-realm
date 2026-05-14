@@ -6,8 +6,8 @@ import type { SessionBundle, SessionListItem, WorldCardItem, WorldSelectionData 
 const MODEL_LABELS: Record<string, string> = {
   "deepseek-v4-flash": "DeepSeek V4 Flash",
   "deepseek-v4-pro": "DeepSeek V4 Pro",
-  "deepseek-chat": "旧版兼容：Chat",
-  "deepseek-reasoner": "旧版兼容：Reasoner",
+  "deepseek-chat": "DeepSeek Chat",
+  "deepseek-reasoner": "DeepSeek Reasoner",
 };
 
 type WorldDraft = {
@@ -56,7 +56,7 @@ function formatDate(value: string) {
 }
 
 function getWorldTone(index: number) {
-  return ["潮声", "旧债", "秘密", "黄昏"][index % 4];
+  return ["潮声", "旧约", "秘密", "黄昏"][index % 4];
 }
 
 export function WorldSelect({ initialData }: WorldSelectProps) {
@@ -66,7 +66,7 @@ export function WorldSelect({ initialData }: WorldSelectProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState("选择一个世界，读取一段关系，或开始新的邂逅。");
+  const [feedback, setFeedback] = useState("选择一个世界，读取一段关系，或者开始新的邂逅。");
   const [draft, setDraft] = useState<WorldDraft>({
     name: "",
     description: "",
@@ -96,7 +96,7 @@ export function WorldSelect({ initialData }: WorldSelectProps) {
 
       window.location.href = `/?session=${payload.session.id}`;
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "开始聊天失败。");
+      setError(caughtError instanceof Error ? caughtError.message : "开始剧情失败。");
       setIsWorking(false);
     }
   }
@@ -160,12 +160,12 @@ export function WorldSelect({ initialData }: WorldSelectProps) {
   }
 
   return (
-    <main className="world-library-shell">
-      <section className="world-library-hero">
+    <main className="world-library-shell world-library-shell-rich">
+      <section className="world-library-hero world-library-hero-rich">
         <div>
           <p className="eyebrow">Love Realm</p>
-          <h1>选择一个世界，进入一段会被记住的关系。</h1>
-          <p>世界卡承载背景、角色、状态栏和存档。开始新剧情前，先查看舞台、角色与已有分支。</p>
+          <h1>先搭好舞台，再进入一段会被记住的关系。</h1>
+          <p>世界卡承载背景、角色、节奏规则和存档。现在你可以从入口就设定更长线的体验，而不只是随机进入一个简陋场景。</p>
         </div>
         <div className="world-quick-panel">
           <span className="status-pill">{recentSave ? `最近：${recentSave.worldName}` : "暂无已保存章节"}</span>
@@ -210,15 +210,19 @@ export function WorldSelect({ initialData }: WorldSelectProps) {
 
         {selectedWorld ? (
           <section className="world-detail-panel panel">
-            <div className="world-detail-cover">
+            <div className="world-detail-cover world-detail-cover-rich">
               <div>
                 <p className="eyebrow">世界详情</p>
                 <h2>{selectedWorld.name}</h2>
                 <p>{selectedWorld.description}</p>
               </div>
-              <button className="primary-button" type="button" onClick={() => startWorld(selectedWorld.id)} disabled={isWorking}>
-                开始新的临时剧情
-              </button>
+              <div className="world-cover-meta">
+                <span className="scene-badge">节奏：{selectedWorld.directorConfig.pacing}</span>
+                <span className="scene-badge">体验：{selectedWorld.directorConfig.beatLabel}</span>
+                <button className="primary-button" type="button" onClick={() => startWorld(selectedWorld.id)} disabled={isWorking}>
+                  开始新的临时剧情
+                </button>
+              </div>
             </div>
 
             <div className="world-detail-grid">
@@ -226,6 +230,12 @@ export function WorldSelect({ initialData }: WorldSelectProps) {
                 <p className="eyebrow">开场舞台</p>
                 <h3>{selectedWorld.defaultScene}</h3>
                 <p>{selectedWorld.premise}</p>
+              </section>
+
+              <section className="world-detail-section">
+                <p className="eyebrow">主角模板</p>
+                <h3>{selectedWorld.playerProfileTemplate.role}</h3>
+                <p>{selectedWorld.playerProfileTemplate.displayName} 将作为默认主角入口，你也可以在剧情内改成任意自定义人设。</p>
               </section>
 
               <section className="world-detail-section">
@@ -281,7 +291,7 @@ export function WorldSelect({ initialData }: WorldSelectProps) {
           <div className="world-create-grid">
             <label className="field-block">
               <span className="field-label">世界名称</span>
-              <input className="api-key-input" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：雾港旧梦" />
+              <input className="api-key-input" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="例如：雾港旧楼" />
             </label>
             <label className="field-block">
               <span className="field-label">默认开场场景</span>

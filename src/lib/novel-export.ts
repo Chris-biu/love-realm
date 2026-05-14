@@ -26,7 +26,7 @@ function selectMessages(bundle: SessionBundle, options?: NovelExportOptions) {
 }
 
 function formatPlayerAction(content: string) {
-  return `这一刻，你选择${content.replace(/[。！？!?]$/, "")}。`;
+  return `这一刻，你选择${content.replace(/[。！？?]$/, "")}。`;
 }
 
 export function buildQuickNovelMarkdown(bundle: SessionBundle, options?: NovelExportOptions) {
@@ -44,7 +44,7 @@ export function buildQuickNovelMarkdown(bundle: SessionBundle, options?: NovelEx
   for (const message of messages) {
     if (message.turnNumber !== currentTurn) {
       currentTurn = message.turnNumber;
-      lines.push("", `## 第 ${currentTurn} 节`, "");
+      lines.push("", `## 第 ${currentTurn} 章`, "");
     }
 
     if (message.role === MessageRole.USER) {
