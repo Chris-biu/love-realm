@@ -12,6 +12,10 @@ The app currently uses DeepSeek for generation. Players must provide their own D
 ## What Changed In This Update
 
 - Richer frontend presentation with a more cinematic story stage, layered world shelf, and backstage control console.
+- Chat-first reading layout refresh:
+  - the main page now prioritizes the conversation viewport instead of persistent side panels
+  - relationship overview, branch saves, memory, and backstage controls are progressively disclosed through compact UI entry points and drawers
+  - non-chat chrome is intentionally minimized so long-form reading and replying stay dominant on screen
 - New protagonist profile system on the session layer:
   - display name
   - role / identity
@@ -33,6 +37,7 @@ The app currently uses DeepSeek for generation. Players must provide their own D
 ## Core Features
 
 - Interactive long-form narrative generation with a configurable minimum reply length.
+- Chat-first stage UI with drawer-based secondary panels.
 - Session-based branching and save slots.
 - Static character cards plus dynamic per-session runtime character state.
 - Relationship meters with configurable caps and stage labels.

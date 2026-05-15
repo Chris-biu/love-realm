@@ -20,7 +20,7 @@ type ChatAppProps = {
 };
 
 type FeedbackTone = "default" | "success" | "pending";
-type DrawerView = "none" | "stage" | "backstage";
+type DrawerView = "none" | "stage" | "backstage" | "sidebar";
 type NovelExportMode = "quick" | "polished";
 
 type WorldDraft = {
@@ -522,6 +522,21 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
     <>
       <main className="story-shell story-shell-rich">
         <aside className="story-sidebar">
+          <button className="quickbar-button quickbar-button-primary" type="button" onClick={() => setDrawerView("sidebar")}>
+            <span className="quickbar-button-label">面板</span>
+            <strong>{activeSession.relationships.length}</strong>
+            <small>角色</small>
+          </button>
+          <button className="quickbar-button" type="button" onClick={() => setDrawerView("stage")}>
+            <span className="quickbar-button-label">回忆</span>
+            <strong>{activeSession.memorySummaries.length}</strong>
+            <small>记录</small>
+          </button>
+          <button className="quickbar-button" type="button" onClick={() => setDrawerView("backstage")}>
+            <span className="quickbar-button-label">设定</span>
+            <strong>{activeSession.characters.length}</strong>
+            <small>角色</small>
+          </button>
           <section className="panel relationship-panel panel-elevated">
             <div className="section-header">
               <div>
@@ -696,6 +711,88 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
       </main>
 
       <div className={`console-backdrop ${drawerView !== "none" ? "open" : ""}`} onClick={() => setDrawerView("none")} aria-hidden={drawerView === "none"} />
+
+      <aside className={`story-sidebar-drawer ${drawerView === "sidebar" ? "open" : ""}`}>
+        <div className="settings-drawer-header">
+          <div>
+            <p className="eyebrow">剧情总览</p>
+            <h2>关系与分支</h2>
+          </div>
+          <button className="ghost-button" type="button" onClick={() => setDrawerView("none")}>收起</button>
+        </div>
+        <div className="settings-drawer-scroll">
+          <section className="panel relationship-panel panel-elevated">
+            <div className="section-header">
+              <div>
+                <p className="eyebrow">关系面板</p>
+                <h2>角色温度</h2>
+              </div>
+              <button className="secondary-button" onClick={createSession} disabled={isWorking || Boolean(deletingSessionId)}>新分支</button>
+            </div>
+
+            <div className="relationship-focus">
+              <span className="focus-label">主角档案</span>
+              <strong>{activeSession.playerProfile.displayName}</strong>
+              <p>{summarizePlayerProfile(activeSession.playerProfile) || "还没有为这一条剧情分支设定主角风格。"}</p>
+            </div>
+
+            <div className="relationship-stack">
+              {activeSession.relationships.map((item) => {
+                const character = activeSession.characters.find((entry) => entry.id === item.characterId);
+                return (
+                  <article key={item.id} className="relationship-card relationship-card-rich">
+                    <div className="relationship-topline">
+                      <div>
+                        <strong>{item.character.name}</strong>
+                        <p className="relationship-meta">{item.character.gender} / {character?.roleLabel || "关键角色"}</p>
+                      </div>
+                    </div>
+                    <div className="metric-chip-row">
+                      {activeSession.statusMetrics.map((metric) => {
+                        const max = getMetricMax(metric);
+                        const value = clampRelationshipMetric(item.metrics[metric.key] ?? 0, max);
+                        return (
+                          <div key={metric.key} className="metric-meter">
+                            <div className="metric-meter-topline">
+                              <span>{metric.label}</span>
+                              <strong>{value}/{max}</strong>
+                            </div>
+                            <div className="metric-meter-track"><span className="metric-meter-fill" style={{ width: `${(value / max) * 100}%` }} /></div>
+                            <span className="metric-stage">{getRelationshipStage(value, metric.key, max)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="panel session-panel">
+            <div className="section-header">
+              <div>
+                <p className="eyebrow">剧情分支</p>
+                <h2>章节存档</h2>
+              </div>
+            </div>
+            <div className="session-list">
+              {sessions.map((session, index) => (
+                <div key={session.id} className="session-row">
+                  <button className={`session-item ${session.id === activeSession.id ? "active" : ""}`} onClick={() => switchSession(session.id)} disabled={loadingSessionId === session.id || isWorking || Boolean(deletingSessionId)}>
+                    <span>第 {index + 1} 章</span>
+                    <strong>{session.title}</strong>
+                    <small>{loadingSessionId === session.id ? "切换中..." : `${getModelLabel(session.model)} / ${session.isSaved ? "已存档" : "临时"}`}</small>
+                  </button>
+                  <button className="session-delete-button" type="button" onClick={() => deleteSession(session.id)} disabled={Boolean(deletingSessionId) || isWorking}>
+                    {deletingSessionId === session.id ? "删除中..." : "删除"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </aside>
 
       <aside className={`stage-info-drawer ${drawerView === "stage" ? "open" : ""}`}>
         <div className="settings-drawer-header"><div><p className="eyebrow">回忆与场景</p><h2>{activeSession.world.name}</h2></div><button className="ghost-button" type="button" onClick={() => setDrawerView("none")}>收起</button></div>
