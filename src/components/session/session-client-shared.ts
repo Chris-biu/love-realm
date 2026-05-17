@@ -28,7 +28,8 @@ export type CharacterDraft = {
   currentRelationship: string;
   attitudeTowardPlayer: string;
   playerAddress: string;
-  persistentFactsText: string;
+  highPriorityFactsText: string;
+  standardFactsText: string;
 };
 
 export const API_KEY_STORAGE_KEY = "moonlit_residence_deepseek_api_key";
@@ -111,7 +112,8 @@ export function createCharacterDrafts(session: SessionBundle): CharacterDraft[] 
     currentRelationship: character.runtimeState.currentRelationship.value,
     attitudeTowardPlayer: character.runtimeState.attitudeTowardPlayer.value,
     playerAddress: character.runtimeState.playerAddress.value,
-    persistentFactsText: character.runtimeState.persistentFacts.value.join("\n"),
+    highPriorityFactsText: character.runtimeState.persistentFacts.highPriority.join("\n"),
+    standardFactsText: character.runtimeState.persistentFacts.standard.join("\n"),
   }));
 }
 
@@ -128,7 +130,8 @@ export function formatRuntimeState(runtimeState: CharacterRuntimeState) {
   if (runtimeState.currentRelationship.value) lines.push(`当前关系：${runtimeState.currentRelationship.value}`);
   if (runtimeState.attitudeTowardPlayer.value) lines.push(`对玩家态度：${runtimeState.attitudeTowardPlayer.value}`);
   if (runtimeState.playerAddress.value) lines.push(`对玩家称呼：${runtimeState.playerAddress.value}`);
-  if (runtimeState.persistentFacts.value.length) lines.push(`不会遗忘的事实：${runtimeState.persistentFacts.value.join("；")}`);
+  if (runtimeState.persistentFacts.highPriority.length) lines.push(`高优先级事实：${runtimeState.persistentFacts.highPriority.join("；")}`);
+  if (runtimeState.persistentFacts.standard.length) lines.push(`普通事实：${runtimeState.persistentFacts.standard.join("；")}`);
   return lines;
 }
 

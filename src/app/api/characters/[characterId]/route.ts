@@ -23,7 +23,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         currentRelationship?: string;
         attitudeTowardPlayer?: string;
         playerAddress?: string;
-        persistentFacts?: string[];
+        persistentFacts?: {
+          highPriority?: string[];
+          standard?: string[];
+        };
       };
     };
 

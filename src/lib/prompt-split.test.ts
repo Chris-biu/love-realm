@@ -83,7 +83,8 @@ const bundle = {
         attitudeTowardPlayer: { value: "Warm but guarded", source: "AI" },
         playerAddress: { value: "dear", source: "PLAYER" },
         persistentFacts: {
-          value: ["She accepted the player's confession."],
+          highPriority: ["She accepted the player's confession."],
+          standard: ["She hides the brass key in her coat pocket."],
           source: "PLAYER",
         },
       },
@@ -100,7 +101,8 @@ const bundle = {
         attitudeTowardPlayer: { value: "Warm but guarded", source: "AI" },
         playerAddress: { value: "dear", source: "PLAYER" },
         persistentFacts: {
-          value: ["She accepted the player's confession."],
+          highPriority: ["She accepted the player's confession."],
+          standard: ["She hides the brass key in her coat pocket."],
           source: "PLAYER",
         },
       },
@@ -182,4 +184,13 @@ test("state update prompt keeps manual character fields protected while allowing
 
   assert.match(prompts.systemPrompt, /PLAYER/);
   assert.match(prompts.systemPrompt, /persistentFacts/);
+});
+
+test("prompts separate high-priority facts from standard facts", () => {
+  const prompts = buildNarrativePrompts(bundle, "Ask Lin Yue about the brass key.");
+
+  assert.match(prompts.userPrompt, /高优先级事实/);
+  assert.match(prompts.userPrompt, /普通事实/);
+  assert.match(prompts.userPrompt, /She accepted the player's confession/);
+  assert.match(prompts.userPrompt, /She hides the brass key in her coat pocket/);
 });

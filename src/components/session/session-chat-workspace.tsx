@@ -7,7 +7,6 @@ import {
   API_KEY_STORAGE_KEY,
   type FeedbackTone,
   STARTER_PROMPTS,
-  getPacingLabel,
   readJson,
   splitParagraphs,
 } from "./session-client-shared";
@@ -34,7 +33,6 @@ export function SessionChatWorkspace({ initialSession }: SessionChatWorkspacePro
   const [isWorking, setIsWorking] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [heroCollapsed, setHeroCollapsed] = useState(false);
 
   useEffect(() => {
     const storedApiKey = window.localStorage.getItem(API_KEY_STORAGE_KEY) ?? "";
@@ -118,34 +116,9 @@ export function SessionChatWorkspace({ initialSession }: SessionChatWorkspacePro
 
   return (
     <section className={`${styles.panel} ${styles.chatSurface}`}>
-      <div className={`${styles.hero} ${heroCollapsed ? styles.heroCollapsed : ""}`}>
-        <div className={styles.heroBar}>
-          <div className={styles.heroText}>
-            <p className={styles.eyebrow}>{session.world.name}</p>
-            <h2 className={styles.heroTitle}>{session.sceneState.currentScene}</h2>
-          </div>
-          <div className={styles.heroBarActions}>
-            <div className={styles.chipRow}>
-              <span className={styles.chip}>{session.sceneState.currentTime}</span>
-              <span className={styles.chip}>{session.sceneState.atmosphere}</span>
-              <span className={styles.chip}>节奏 {getPacingLabel(session.world.directorConfig.pacing)}</span>
-            </div>
-            <button
-              type="button"
-              className={styles.collapseButton}
-              aria-expanded={!heroCollapsed}
-              onClick={() => setHeroCollapsed((current) => !current)}
-            >
-              {heroCollapsed ? "展开场景" : "收起场景"}
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.heroBody}>
-          <p className={styles.heroSummary}>{session.sceneState.summary}</p>
-          <div className={styles.stack}>
-            <span className={styles.statusBadge}>{statusCopy}</span>
-          </div>
+      <div className={styles.chatStatusBar}>
+        <div className={styles.chipRow}>
+          <span className={styles.statusBadge}>{statusCopy}</span>
         </div>
       </div>
 

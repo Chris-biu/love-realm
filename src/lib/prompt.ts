@@ -21,7 +21,12 @@ function formatRuntimeState(runtimeState: CharacterRuntimeState) {
   if (runtimeState.currentRelationship.value) lines.push(`当前关系：${runtimeState.currentRelationship.value}（来源=${runtimeState.currentRelationship.source}）`);
   if (runtimeState.attitudeTowardPlayer.value) lines.push(`对玩家态度：${runtimeState.attitudeTowardPlayer.value}（来源=${runtimeState.attitudeTowardPlayer.source}）`);
   if (runtimeState.playerAddress.value) lines.push(`对玩家称呼：${runtimeState.playerAddress.value}（来源=${runtimeState.playerAddress.source}）`);
-  if (runtimeState.persistentFacts.value.length) lines.push(`不可遗忘事实：${runtimeState.persistentFacts.value.join("；")}（来源=${runtimeState.persistentFacts.source}）`);
+  if (runtimeState.persistentFacts.highPriority.length) {
+    lines.push(`高优先级事实：${runtimeState.persistentFacts.highPriority.join("；")}（来源=${runtimeState.persistentFacts.source}）`);
+  }
+  if (runtimeState.persistentFacts.standard.length) {
+    lines.push(`普通事实：${runtimeState.persistentFacts.standard.join("；")}（来源=${runtimeState.persistentFacts.source}）`);
+  }
   return lines.length ? lines.join("\n") : "暂无动态档案";
 }
 
@@ -47,7 +52,10 @@ function buildRetrievedContext(bundle: SessionBundle, userInput: string) {
   const factMatches = retrieveRelevantText(
     [
       ...bundle.sceneState.facts,
-      ...bundle.characters.flatMap((character) => character.runtimeState.persistentFacts.value.map((fact) => `${character.name}：${fact}`)),
+      ...bundle.characters.flatMap((character) => [
+        ...character.runtimeState.persistentFacts.highPriority.map((fact) => `${character.name}：高优先级事实：${fact}`),
+        ...character.runtimeState.persistentFacts.standard.map((fact) => `${character.name}：普通事实：${fact}`),
+      ]),
     ],
     userInput,
     retrieval.factLimit,
@@ -210,7 +218,10 @@ export function buildStateUpdatePrompts(bundle: SessionBundle, userInput: string
     '        "currentRelationship": "当前关系",',
     '        "attitudeTowardPlayer": "对玩家态度",',
     '        "playerAddress": "对玩家称呼",',
-    '        "persistentFacts": ["不可遗忘事实"]',
+    '        "persistentFacts": {',
+    '          "highPriority": ["高优先级事实"],',
+    '          "standard": ["普通事实"]',
+    "        }",
     "      }",
     "    },",
     '    "sceneChanges": ["场景变化描述"],',
@@ -233,9 +244,10 @@ export function buildStateUpdatePrompts(bundle: SessionBundle, userInput: string
     "7. suggestedActions 必须返回 3 条简短、可直接点击的剧情建议，要紧贴当前上下文。",
     "8. 不得把模型临时生成的无名背景人物写成重要人物、长期记忆对象、关系对象或 suggestedActions 的核心对象。",
     "9. 如果正文中出现未在白名单内、且非玩家明确点名的新姓名，hiddenStateUpdate 必须忽略该人物，不得为其创建关系变化或长期记忆。",
-    "10. characterStateUpdates 用来维护角色当前身份、当前关系、对玩家态度、对玩家称呼和不可遗忘事实。",
+    "10. characterStateUpdates 用来维护角色当前身份、当前关系、对玩家态度、对玩家称呼，以及两层不可遗忘事实结构。",
     "11. 玩家手动设定来源为 PLAYER，优先级最高；你可以在 characterStateUpdates 中提出更新，但系统不会让 AI 覆盖 PLAYER 文本字段。",
-    "12. 对于不可遗忘事实，如果玩家手动修订过已有事实，后续 AI 仍可补充新增事实，但不要重写玩家已经确认的旧事实。",
+    "12. persistentFacts.highPriority 只用于最核心、不可逆、长期高权重的事实；persistentFacts.standard 用于普通长期事实。",
+    "13. 如果玩家手动修订过已有高优先级事实，AI 不得覆盖；普通事实允许继续追加新增条目，但不要重写玩家已确认内容。",
     "",
     "本轮重要角色白名单：",
     allowedCharacters,

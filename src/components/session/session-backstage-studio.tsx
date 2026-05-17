@@ -284,7 +284,10 @@ export function SessionBackstageStudio({
               currentRelationship: draft.currentRelationship,
               attitudeTowardPlayer: draft.attitudeTowardPlayer,
               playerAddress: draft.playerAddress,
-              persistentFacts: parseRuntimeFacts(draft.persistentFactsText),
+              persistentFacts: {
+                highPriority: parseRuntimeFacts(draft.highPriorityFactsText),
+                standard: parseRuntimeFacts(draft.standardFactsText),
+              },
             },
           }),
         }),
@@ -552,7 +555,24 @@ export function SessionBackstageStudio({
                   <label className={styles.field}><span className={styles.eyebrow}>当前关系</span><input className={styles.input} value={draft.currentRelationship} onChange={(event) => updateCharacterDraft(draft.id, { currentRelationship: event.target.value })} /></label>
                   <label className={styles.field}><span className={styles.eyebrow}>对玩家态度</span><input className={styles.input} value={draft.attitudeTowardPlayer} onChange={(event) => updateCharacterDraft(draft.id, { attitudeTowardPlayer: event.target.value })} /></label>
                   <label className={styles.field}><span className={styles.eyebrow}>对玩家称呼</span><input className={styles.input} value={draft.playerAddress} onChange={(event) => updateCharacterDraft(draft.id, { playerAddress: event.target.value })} /></label>
-                  <label className={styles.field}><span className={styles.eyebrow}>不会遗忘的事实</span><textarea className={styles.textareaField} value={draft.persistentFactsText} onChange={(event) => updateCharacterDraft(draft.id, { persistentFactsText: event.target.value })} rows={4} /></label>
+                  <label className={styles.field}>
+                    <span className={styles.eyebrow}>高优先级事实</span>
+                    <textarea
+                      className={styles.textareaField}
+                      value={draft.highPriorityFactsText}
+                      onChange={(event) => updateCharacterDraft(draft.id, { highPriorityFactsText: event.target.value })}
+                      rows={4}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span className={styles.eyebrow}>普通事实</span>
+                    <textarea
+                      className={styles.textareaField}
+                      value={draft.standardFactsText}
+                      onChange={(event) => updateCharacterDraft(draft.id, { standardFactsText: event.target.value })}
+                      rows={4}
+                    />
+                  </label>
                 </div>
               </article>
             ))}

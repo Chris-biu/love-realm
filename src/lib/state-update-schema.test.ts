@@ -36,12 +36,18 @@ test("parses character runtime state updates from hidden state JSON", () => {
           currentRelationship: "恋人",
           attitudeTowardPlayer: "亲密但嘴硬",
           playerAddress: "亲爱的",
-          persistentFacts: ["她已经接受玩家告白"],
+          persistentFacts: {
+            highPriority: ["她已经接受玩家告白"],
+            standard: ["她仍然把黄铜钥匙藏在外套口袋里"],
+          },
         },
       },
     }),
   );
 
   assert.equal(parsed.characterStateUpdates.lin_yue.currentIdentity, "玩家的女朋友");
-  assert.deepEqual(parsed.characterStateUpdates.lin_yue.persistentFacts, ["她已经接受玩家告白"]);
+  assert.deepEqual(parsed.characterStateUpdates.lin_yue.persistentFacts, {
+    highPriority: ["她已经接受玩家告白"],
+    standard: ["她仍然把黄铜钥匙藏在外套口袋里"],
+  });
 });

@@ -45,7 +45,8 @@ type CharacterDraft = {
   currentRelationship: string;
   attitudeTowardPlayer: string;
   playerAddress: string;
-  persistentFactsText: string;
+  highPriorityFactsText: string;
+  standardFactsText: string;
 };
 
 const API_KEY_STORAGE_KEY = "moonlit_residence_deepseek_api_key";
@@ -98,7 +99,8 @@ function createCharacterDrafts(session: SessionBundle): CharacterDraft[] {
     currentRelationship: character.runtimeState.currentRelationship.value,
     attitudeTowardPlayer: character.runtimeState.attitudeTowardPlayer.value,
     playerAddress: character.runtimeState.playerAddress.value,
-    persistentFactsText: character.runtimeState.persistentFacts.value.join("\n"),
+    highPriorityFactsText: character.runtimeState.persistentFacts.highPriority.join("\n"),
+    standardFactsText: character.runtimeState.persistentFacts.standard.join("\n"),
   }));
 }
 
@@ -384,7 +386,10 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
               currentRelationship: draft.currentRelationship,
               attitudeTowardPlayer: draft.attitudeTowardPlayer,
               playerAddress: draft.playerAddress,
-              persistentFacts: parseRuntimeFacts(draft.persistentFactsText),
+              persistentFacts: {
+                highPriority: parseRuntimeFacts(draft.highPriorityFactsText),
+                standard: parseRuntimeFacts(draft.standardFactsText),
+              },
             },
           }),
         }),
@@ -905,7 +910,8 @@ export function ChatApp({ initialData, initialSessionId }: ChatAppProps) {
                       <label className="field-block"><span className="field-label">当前关系</span><input className="api-key-input" value={draft.currentRelationship} onChange={(event) => updateCharacterDraft(draft.id, { currentRelationship: event.target.value })} /></label>
                       <label className="field-block"><span className="field-label">对玩家态度</span><input className="api-key-input" value={draft.attitudeTowardPlayer} onChange={(event) => updateCharacterDraft(draft.id, { attitudeTowardPlayer: event.target.value })} /></label>
                       <label className="field-block"><span className="field-label">对玩家称呼</span><input className="api-key-input" value={draft.playerAddress} onChange={(event) => updateCharacterDraft(draft.id, { playerAddress: event.target.value })} /></label>
-                      <label className="field-block"><span className="field-label">不可遗忘事实</span><textarea value={draft.persistentFactsText} onChange={(event) => updateCharacterDraft(draft.id, { persistentFactsText: event.target.value })} rows={4} placeholder="每行一条事实" /></label>
+                      <label className="field-block"><span className="field-label">高优先级事实</span><textarea value={draft.highPriorityFactsText} onChange={(event) => updateCharacterDraft(draft.id, { highPriorityFactsText: event.target.value })} rows={4} placeholder="每行一条最高权重事实" /></label>
+                      <label className="field-block"><span className="field-label">普通事实</span><textarea value={draft.standardFactsText} onChange={(event) => updateCharacterDraft(draft.id, { standardFactsText: event.target.value })} rows={4} placeholder="每行一条普通长期事实" /></label>
                       <p className="muted compact-text">用户手动修订的事实将被保留，后续 AI 只会补充新增事实，不会再把这一栏锁死。</p>
                     </div>
                   </div>

@@ -17,7 +17,10 @@ export const hiddenStateUpdateSchema = z.object({
       currentRelationship: z.string().optional(),
       attitudeTowardPlayer: z.string().optional(),
       playerAddress: z.string().optional(),
-      persistentFacts: z.array(z.string()).optional(),
+      persistentFacts: z.object({
+        highPriority: z.array(z.string()).default([]),
+        standard: z.array(z.string()).default([]),
+      }).optional(),
     }),
   ).default({}),
 });

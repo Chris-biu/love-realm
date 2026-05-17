@@ -37,13 +37,15 @@ test("player-edited persistent facts remain protected but AI can still append ne
   });
 
   const merged = mergeCharacterRuntimeState(current, {
-    persistentFacts: [
-      "She keeps the old brass key in her coat pocket.",
-      "The player now knows her real surname.",
-    ],
+    persistentFacts: {
+      standard: [
+        "She keeps the old brass key in her coat pocket.",
+        "The player now knows her real surname.",
+      ],
+    },
   });
 
-  assert.deepEqual(merged.persistentFacts.value, [
+  assert.deepEqual(merged.persistentFacts.standard, [
     "The player now knows her real surname.",
     "She keeps the old brass key in her coat pocket.",
   ]);
@@ -57,7 +59,7 @@ test("manual character runtime state is marked as player sourced", () => {
       currentRelationship: "Lovers",
       attitudeTowardPlayer: "Affectionate but competitive",
       playerAddress: "dear",
-      persistentFacts: ["She turned from rival to lover."],
+      persistentFacts: { standard: ["She turned from rival to lover."] },
     },
     "PLAYER",
   );
@@ -65,4 +67,43 @@ test("manual character runtime state is marked as player sourced", () => {
   assert.equal(merged.currentIdentity.source, "PLAYER");
   assert.equal(merged.currentRelationship.source, "PLAYER");
   assert.equal(merged.persistentFacts.source, "PLAYER");
+});
+
+test("legacy persistent facts are migrated into standard-priority facts", () => {
+  const normalized = normalizeCharacterRuntimeState({
+    persistentFacts: {
+      value: ["The player knows her real surname."],
+      source: "PLAYER",
+    },
+  });
+
+  assert.deepEqual(normalized.persistentFacts.highPriority, []);
+  assert.deepEqual(normalized.persistentFacts.standard, ["The player knows her real surname."]);
+  assert.equal(normalized.persistentFacts.source, "PLAYER");
+});
+
+test("player-edited high-priority facts stay protected while ai appends standard facts", () => {
+  const current = normalizeCharacterRuntimeState({
+    persistentFacts: {
+      highPriority: ["She accepted the player's confession."],
+      standard: ["She hides a brass key in her coat pocket."],
+      source: "PLAYER",
+    },
+  });
+
+  const merged = mergeCharacterRuntimeState(current, {
+    persistentFacts: {
+      highPriority: ["She betrayed the player."],
+      standard: [
+        "She hides a brass key in her coat pocket.",
+        "She avoids the music room after midnight.",
+      ],
+    },
+  });
+
+  assert.deepEqual(merged.persistentFacts.highPriority, ["She accepted the player's confession."]);
+  assert.deepEqual(merged.persistentFacts.standard, [
+    "She hides a brass key in her coat pocket.",
+    "She avoids the music room after midnight.",
+  ]);
 });

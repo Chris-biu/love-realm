@@ -8,7 +8,8 @@ export type RuntimeTextField = {
 };
 
 export type RuntimeFactsField = {
-  value: string[];
+  highPriority: string[];
+  standard: string[];
   source: RuntimeStateSource;
 };
 
@@ -25,7 +26,10 @@ export type CharacterRuntimeStateUpdate = {
   currentRelationship?: string;
   attitudeTowardPlayer?: string;
   playerAddress?: string;
-  persistentFacts?: string[];
+  persistentFacts?: {
+    highPriority?: string[];
+    standard?: string[];
+  };
 };
 
 const EMPTY_STATE: CharacterRuntimeState = {
@@ -33,7 +37,7 @@ const EMPTY_STATE: CharacterRuntimeState = {
   currentRelationship: { value: "", source: "AI" },
   attitudeTowardPlayer: { value: "", source: "AI" },
   playerAddress: { value: "", source: "AI" },
-  persistentFacts: { value: [], source: "AI" },
+  persistentFacts: { highPriority: [], standard: [], source: "AI" },
 };
 
 function normalizeSource(value: unknown): RuntimeStateSource {
@@ -50,16 +54,39 @@ function normalizeTextField(value: unknown): RuntimeTextField {
 }
 
 function normalizeFactsField(value: unknown): RuntimeFactsField {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { value: [], source: "AI" };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { highPriority: [], standard: [], source: "AI" };
   const field = value as { value?: unknown; source?: unknown };
+  const legacyValue = Array.isArray(field.value) ? field.value.filter((item): item is string => typeof item === "string") : [];
+
+  if ("highPriority" in field || "standard" in field) {
+    const nextField = field as { highPriority?: unknown; standard?: unknown; source?: unknown };
+    return {
+      highPriority: Array.isArray(nextField.highPriority)
+        ? nextField.highPriority.filter((item): item is string => typeof item === "string")
+        : [],
+      standard: Array.isArray(nextField.standard)
+        ? nextField.standard.filter((item): item is string => typeof item === "string")
+        : legacyValue,
+      source: normalizeSource(field.source),
+    };
+  }
+
   return {
-    value: Array.isArray(field.value) ? field.value.filter((item): item is string => typeof item === "string") : [],
+    highPriority: [],
+    standard: legacyValue,
     source: normalizeSource(field.source),
   };
 }
 
 function dedupeFacts(values: string[]) {
-  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean))).slice(0, 12);
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+}
+
+function clampFactBuckets(facts: { highPriority: string[]; standard: string[] }) {
+  return {
+    highPriority: dedupeFacts(facts.highPriority).slice(0, 6),
+    standard: dedupeFacts(facts.standard).slice(0, 12),
+  };
 }
 
 export function normalizeCharacterRuntimeState(value: Prisma.JsonValue | unknown): CharacterRuntimeState {
@@ -81,26 +108,38 @@ function mergeTextField(current: RuntimeTextField, next: string | undefined, sou
   return { value, source };
 }
 
-function mergeFactsField(current: RuntimeFactsField, next: string[] | undefined, source: RuntimeStateSource) {
-  const incoming = dedupeFacts(next ?? []);
-  if (!incoming.length) return current;
+function mergeFactsField(
+  current: RuntimeFactsField,
+  next: { highPriority?: string[]; standard?: string[] } | undefined,
+  source: RuntimeStateSource,
+) {
+  const incoming = clampFactBuckets({
+    highPriority: next?.highPriority ?? [],
+    standard: next?.standard ?? [],
+  });
+  if (!incoming.highPriority.length && !incoming.standard.length) return current;
 
   if (source === "PLAYER") {
     return {
-      value: incoming,
+      ...incoming,
       source: "PLAYER" as RuntimeStateSource,
     };
   }
 
   if (current.source === "PLAYER") {
+    const currentBuckets = clampFactBuckets(current);
     return {
-      value: dedupeFacts([...current.value, ...incoming]),
+      highPriority: currentBuckets.highPriority,
+      standard: clampFactBuckets({
+        highPriority: [],
+        standard: [...currentBuckets.standard, ...incoming.standard],
+      }).standard,
       source: "PLAYER" as RuntimeStateSource,
     };
   }
 
   return {
-    value: dedupeFacts(incoming),
+    ...incoming,
     source,
   };
 }
