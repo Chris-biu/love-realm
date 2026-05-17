@@ -1,9 +1,21 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
+
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-ui",
+  weight: ["400", "500"],
+});
+
 export const metadata: Metadata = {
-  title: "Moonlit Residence MVP",
-  description: "LLM-driven romance narrative MVP powered by DeepSeek",
+  title: "Love Realm",
+  description: "Interactive romance narrative with chat-first reading and backstage world control.",
 };
 
 export default function RootLayout({
@@ -13,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body className={`${outfit.variable} ${mono.variable}`}>{children}</body>
     </html>
   );
 }

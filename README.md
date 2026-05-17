@@ -11,11 +11,17 @@ The app currently uses DeepSeek for generation. Players must provide their own D
 
 ## What Changed In This Update
 
-- Richer frontend presentation with a more cinematic story stage, layered world shelf, and backstage control console.
-- Chat-first reading layout refresh:
-  - the main page now prioritizes the conversation viewport instead of persistent side panels
-  - relationship overview, branch saves, memory, and backstage controls are progressively disclosed through compact UI entry points and drawers
-  - non-chat chrome is intentionally minimized so long-form reading and replying stay dominant on screen
+- Full frontend information-architecture upgrade:
+  - the old query-string-driven single-page flow was replaced with real multi-page App Router routes
+  - the app now separates world entry, chat, memory, relationships, and backstage editing into dedicated pages
+  - chat is treated as the primary surface instead of being forced to share space with all support systems
+- New product-style route structure:
+  - `/` for world entry and saved-story access
+  - `/session/[sessionId]` for the focused chat reader/composer
+  - `/session/[sessionId]/memory` for scene state, facts, and long-term memory
+  - `/session/[sessionId]/relationships` for relationship meters and dynamic character state
+  - `/session/[sessionId]/backstage` for protagonist editing, world controls, RAG, model settings, exports, and save management
+- Richer frontend presentation with a more deliberate visual system across the entry hall, chat shell, and backstage console.
 - New protagonist profile system on the session layer:
   - display name
   - role / identity
@@ -37,7 +43,8 @@ The app currently uses DeepSeek for generation. Players must provide their own D
 ## Core Features
 
 - Interactive long-form narrative generation with a configurable minimum reply length.
-- Chat-first stage UI with drawer-based secondary panels.
+- Chat-first multi-page UI with a dedicated reading/writing route.
+- Separate route surfaces for memory, relationships, and backstage controls.
 - Session-based branching and save slots.
 - Static character cards plus dynamic per-session runtime character state.
 - Relationship meters with configurable caps and stage labels.
@@ -62,11 +69,39 @@ The project now has a clearer responsibility split:
   - messages
   - memory summaries
   - dynamic character runtime state
+  - page-level navigation context for chat / memory / relationships / backstage
 - `Character`
   - static role card
   - public summary
   - secret summary
   - initial metric template
+
+## Route Design
+
+The frontend is now intentionally split by task:
+
+- `World entry`
+  - choose a world
+  - create a world card
+  - continue from saved branches
+- `Chat`
+  - read the current scene
+  - send the next action or line
+  - save the current chapter
+- `Memory`
+  - inspect scene changes
+  - inspect accumulated long-term memory
+  - inspect retained facts and narrative context
+- `Relationships`
+  - inspect per-character metric states
+  - inspect dynamic runtime character state
+- `Backstage`
+  - edit protagonist profile
+  - edit world and director settings
+  - edit status metric caps
+  - edit characters and persistent facts
+  - switch model, manage local API key, export novel drafts
+  - manage branches and saves
 
 ## RAG Strategy
 
@@ -159,13 +194,18 @@ prisma/
   seed.ts                 Seed world and character data
 src/
   app/api/                API routes
+  app/session/            Session routes for chat, memory, relationships, backstage
   components/             Frontend UI
+  components/session/     Session shell and page-level client components
   lib/ai/                 DeepSeek adapter
   lib/prompt.ts           Prompt building with retrieval injection
   lib/session-service.ts  Session, world, and state orchestration
   lib/status-metrics.ts   Configurable metric definitions and caps
   lib/story-director.ts   Director pacing and protagonist profile models
   lib/story-retrieval.ts  Lightweight retrieval helpers
+docs/
+  frontend-chat-first-rebuild-prompt.md
+                          Frontend continuation prompt for keeping the app chat-first
 ```
 
 ## Notes

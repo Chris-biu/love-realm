@@ -1,6 +1,6 @@
-import { ChatApp } from "@/components/chat-app";
-import { WorldSelect } from "@/components/world-select";
-import { getAppBootstrap, getWorldSelectionData } from "@/lib/session-service";
+import { redirect } from "next/navigation";
+import { WorldGateway } from "@/components/world-gateway";
+import { getWorldSelectionData } from "@/lib/session-service";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +13,10 @@ type HomePageProps = {
 export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
 
-  if (!params.session) {
-    const data = await getWorldSelectionData();
-    return <WorldSelect initialData={data} />;
+  if (params.session) {
+    redirect(`/session/${params.session}`);
   }
 
-  const data = await getAppBootstrap(params.session);
-  return <ChatApp initialData={data} initialSessionId={data.activeSession.id} />;
+  const data = await getWorldSelectionData();
+  return <WorldGateway initialData={data} />;
 }

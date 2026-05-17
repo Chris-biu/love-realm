@@ -578,6 +578,16 @@ export async function updatePlayerProfile(sessionId: string, playerProfile: Play
   return getSessionDetail(sessionId);
 }
 
+export async function updateSessionModel(sessionId: string, model: string) {
+  await ensureDatabaseSchema();
+  const session = await prisma.session.update({
+    where: { id: sessionId },
+    data: { model: normalizeDeepSeekModel(model) },
+    include: sessionInclude,
+  });
+  return mapSession(session);
+}
+
 export async function updateCharacterSettings(characterId: string, input: { name?: string; gender?: string; roleLabel?: string; publicSummary?: string; secretSummary?: string; personalityTags?: string[] }) {
   await ensureDatabaseSchema();
   const character = await prisma.character.update({

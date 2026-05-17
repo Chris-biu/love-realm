@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { deleteSessionById, getSessionDetail, listSessions, saveSessionById, updatePlayerProfile } from "@/lib/session-service";
+import { deleteSessionById, getSessionDetail, listSessions, saveSessionById, updatePlayerProfile, updateSessionModel } from "@/lib/session-service";
 import type { PlayerProfile } from "@/lib/story-director";
 
 type RouteContext = {
@@ -26,10 +26,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { sessionId } = await context.params;
     const body = (await request.json().catch(() => ({}))) as {
       playerProfile?: PlayerProfile;
+      model?: string;
     };
 
     if (body.playerProfile) {
       const session = await updatePlayerProfile(sessionId, body.playerProfile);
+      return NextResponse.json({ session, sessions: await listSessions(session.world.id) });
+    }
+
+    if (body.model) {
+      const session = await updateSessionModel(sessionId, body.model);
       return NextResponse.json({ session, sessions: await listSessions(session.world.id) });
     }
 
