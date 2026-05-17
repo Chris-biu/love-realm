@@ -184,6 +184,7 @@ dist-desktop/Love Realm-win32-x64/
 ```
 
 The generated desktop app starts the bundled Next.js app locally and uses a SQLite database stored in the player's own app data directory.
+The packaging script uses the local Electron cache and then copies `standalone` and `db-template` into the packaged app explicitly, so the final EXE does not depend on a live network download during packaging.
 
 ## Important Paths
 

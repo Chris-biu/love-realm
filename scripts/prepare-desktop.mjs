@@ -40,7 +40,7 @@ function copyIfExists(from, to) {
   if (!existsSync(from)) return;
   rmSync(to, { recursive: true, force: true });
   mkdirSync(path.dirname(to), { recursive: true });
-  cpSync(from, to, { recursive: true });
+  cpSync(from, to, { recursive: true, dereference: true });
 }
 
 function prepareStandaloneAssets() {
@@ -59,35 +59,9 @@ function prepareElectronApp() {
     version: rootPackage.version,
     private: true,
     main: "desktop/main.cjs",
-    build: {
-      appId: "com.love-realm.desktop",
-      productName: "Love Realm",
-      electronVersion,
-      directories: {
-        output: "../../dist-desktop",
-      },
-      npmRebuild: false,
-      buildDependenciesFromSource: false,
-      files: ["desktop/**/*", "package.json"],
-      extraResources: [
-        {
-          from: "../standalone",
-          to: "standalone",
-        },
-        {
-          from: "../db-template",
-          to: "db-template",
-        },
-      ],
-      win: {
-        target: [
-          {
-            target: "portable",
-            arch: ["x64"],
-          },
-        ],
-        artifactName: "${productName}-${version}-${arch}.${ext}",
-      },
+    productName: "Love Realm",
+    devDependencies: {
+      electron: rootPackage.devDependencies?.electron ?? `^${electronVersion}`,
     },
   };
 
